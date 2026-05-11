@@ -42,6 +42,10 @@ usage:
   value from it) back here. Pass --loopback to instead run a local listener on
   127.0.0.1:8765 and auto-receive the callback (only works when the browser
   and the CLI are on the same host and the port is reachable).
+
+  init also accepts --name <slug> and --description <text> to override the
+  manifest defaults (handy if "as-me" is already taken on your account or you
+  want a more specific App identity).
 `;
 
 function openBrowser(url) {
@@ -68,6 +72,10 @@ function parseFlags(args) {
       flags.bot = true;
     } else if (a === "--loopback") {
       flags.loopback = true;
+    } else if (a === "--name") {
+      flags.name = args[++i];
+    } else if (a === "--description") {
+      flags.description = args[++i];
     } else if (a === "--help" || a === "-h") {
       flags.help = true;
     } else {
@@ -81,6 +89,8 @@ async function cmdInit(flags) {
   const manifest = JSON.parse(
     readFileSync(join(REPO_ROOT, "manifest.json"), "utf8"),
   );
+  if (flags.name) manifest.name = flags.name;
+  if (flags.description) manifest.description = flags.description;
   const state = loadState();
   const base = flags.org
     ? `https://github.com/organizations/${flags.org}/settings/apps/new`
@@ -95,8 +105,14 @@ async function cmdInit(flags) {
       port: 8765,
     }));
   } else {
-    console.error("open this URL in any browser to create the GitHub App:");
-    console.error(`\n  ${url}\n`);
+    console.error("open this URL in any browser:\n");
+    console.error(url);
+    console.error(
+      "\non the GitHub page: the manifest pre-fills everything (name, description,\n" +
+        "permissions). scroll to the bottom and click 'Create GitHub App'. don't\n" +
+        "edit any fields. permissions granted: contents/PRs/issues/statuses write,\n" +
+        "metadata read — nothing else. that's the whole juicebox.\n",
+    );
     ({ params } = await promptCallbackUrl({
       path: "/manifest-callback",
       expectParam: "code",
@@ -125,7 +141,12 @@ async function cmdInit(flags) {
   state.html_url = app.html_url;
   if (app.pem) writePem(app.pem);
   saveState(state);
-  console.error(`app created: ${app.html_url}`);
+  console.error(`\napp created: ${app.html_url}\n`);
+  console.error("REQUIRED before `as-me login`:");
+  console.error(`  1. open ${app.html_url}`);
+  console.error("  2. scroll to 'Identifying and authorizing users'");
+  console.error("  3. toggle 'Enable Device Flow' ON, click Save");
+  console.error("  (the manifest can't set this; login aborts without it)\n");
   console.error(`next: as-me install${flags.org ? ` --org ${flags.org}` : ""}`);
 }
 
@@ -142,8 +163,13 @@ async function cmdInstall(flags) {
       port: 8765,
     }));
   } else {
-    console.error("open this URL in any browser to install the App:");
-    console.error(`\n  ${url}\n`);
+    console.error("open this URL in any browser:\n");
+    console.error(url);
+    console.error(
+      "\non the GitHub page: pick which repositories the App can access. fewer\n" +
+        "repos = smaller juicebox = smaller blast radius if anything goes wrong.\n" +
+        "you can change this later in the App settings. click Install when done.\n",
+    );
     ({ params } = await promptCallbackUrl({
       path: ["/callback", "/manifest-callback"],
       expectParam: "installation_id",

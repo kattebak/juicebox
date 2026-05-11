@@ -33,20 +33,26 @@ as-me login                               # user-to-server OAuth (device flow)
 
 ```text
 $ as-me init
-open this URL in any browser to create the GitHub App:
+open this URL in any browser:
 
-  https://github.com/settings/apps/new?manifest=…
+https://github.com/settings/apps/new?manifest=…
 
-manual mode: complete the flow in any browser.
-when GitHub redirects to 127.0.0.1:8765 (page will fail to load), copy the full URL
-from the address bar and paste below — or just the `code=…` value.
+on the GitHub page: the manifest pre-fills everything (name, description,
+permissions). scroll to the bottom and click 'Create GitHub App'. ...
 
 paste: http://127.0.0.1:8765/manifest-callback?code=abc123
+
 app created: https://github.com/settings/apps/as-me
+
+REQUIRED before `as-me login`:
+  1. open https://github.com/settings/apps/as-me
+  2. scroll to 'Identifying and authorizing users'
+  3. toggle 'Enable Device Flow' ON, click Save
+
 next: as-me install
 ```
 
-Omit `--org` to create/install under your own account; pass `--org <name>` to target an org you administer.
+Omit `--org` to create/install under your own account; pass `--org <name>` to target an org you administer. Use `--name <slug>` / `--description <text>` on `init` if `as-me` is already taken on your account or you want a different App identity.
 
 After `as-me init`, toggle **Enable Device Flow** in the App's settings page (manifest can't set it, so it's a one-time UI click). Without it, `as-me login` will abort with `device_flow_disabled`.
 

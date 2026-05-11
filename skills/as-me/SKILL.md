@@ -27,13 +27,13 @@ Run `as-me status` and parse the output. Map to the next section:
 
 ## 3. `as-me init`
 
-Ask which org to create the App under. Default to personal (omit `--org`). Run:
+Ask which org to create the App under. Default to personal (omit `--org`). If `as-me` is already taken on the user's account, or they want a more specific App identity, also pass `--name <slug>` and/or `--description <text>`. Run:
 
 ```sh
-as-me init [--org <org>]
+as-me init [--org <org>] [--name <slug>] [--description <text>]
 ```
 
-The CLI prints a `https://github.com/.../settings/apps/new?manifest=…` URL and waits. Tell the user: open it in any browser (laptop, phone, whatever), click **Create GitHub App**. The browser will redirect to a `127.0.0.1:8765` URL that fails to load — that's expected. Copy the full URL from the address bar (or just the `code=…` value) and paste it into the CLI prompt. The CLI exchanges the code with GitHub and saves the App credentials.
+The CLI prints a `https://github.com/.../settings/apps/new?manifest=…` URL and waits. Tell the user: open it in any browser. **On the GitHub page**, the manifest pre-fills name, description, and permissions — they should scroll straight to the bottom and click **Create GitHub App** without editing anything. The browser will redirect to a `127.0.0.1:8765` URL that fails to load — that's expected. Copy the full URL from the address bar (or just the `code=…` value) and paste it into the CLI prompt. The CLI exchanges the code and saves App credentials.
 
 **Critical — do this immediately after the App is created, before §5:** open the App's settings page → "Identifying and authorizing users" → toggle **Enable Device Flow** on. The manifest cannot set this flag; without it `as-me login` aborts with `device_flow_disabled`. The exact URL is whatever `as-me init` prints as `app created: …` (also visible later via `as-me status` as `html url`) — don't guess the slug; GitHub appends a suffix when the name is taken.
 
@@ -45,7 +45,7 @@ The CLI prints a `https://github.com/.../settings/apps/new?manifest=…` URL and
 as-me install [--org <org>]
 ```
 
-Same shape as §3: CLI prints a `https://github.com/apps/<slug>/installations/new` URL, user opens it in a browser, picks which repos the App can access, then pastes the redirect URL (containing `installation_id=…`) back. `--loopback` works here too.
+Same shape as §3: CLI prints a `https://github.com/apps/<slug>/installations/new` URL, user opens it in a browser. **On the GitHub page**, the user picks which repositories the App can access — fewer repos = smaller blast radius; this can be changed later. After clicking Install, they paste the redirect URL (containing `installation_id=…`) back. `--loopback` works here too.
 
 ## 5. `as-me login`
 
