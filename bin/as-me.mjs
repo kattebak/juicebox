@@ -17,8 +17,9 @@ import {
   refreshIfNeeded,
   startDeviceFlow,
   pollDeviceFlow,
+  fetchAuthenticatedLogin,
 } from "../lib/oauth.mjs";
-import { installationToken } from "../lib/jwt.mjs";
+import { appJwt, installationToken } from "../lib/jwt.mjs";
 import { runGhAsBot } from "../lib/gh-bot.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -150,10 +151,34 @@ async function cmdInstall(flags) {
   }
   const id = params.installation_id;
   if (!id) throw new Error(`no installation_id in callback: ${JSON.stringify(params)}`);
-  const owner = flags.org || "mvhenten";
-  state.installations[owner] = Number.parseInt(id, 10);
+  const installationId = Number.parseInt(id, 10);
+  const owner = flags.org || (await resolveInstallationOwner(state, installationId));
+  state.installations[owner] = installationId;
   saveState(state);
-  console.error(`installed: ${owner} -> ${id}`);
+  console.error(`installed: ${owner} -> ${installationId}`);
+}
+
+async function resolveInstallationOwner(state, installationId) {
+  if (!state.app_id) throw new Error("no app configured; run `as-me init` first");
+  const pem = readPem();
+  const jwt = appJwt(state.app_id, pem);
+  const res = await fetch(
+    `https://api.github.com/app/installations/${installationId}`,
+    {
+      headers: {
+        Authorization: `Bearer ${jwt}`,
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "as-me",
+      },
+    },
+  );
+  if (!res.ok)
+    throw new Error(`GET /app/installations/${installationId} failed ${res.status}`);
+  const json = await res.json();
+  if (!json.account?.login)
+    throw new Error(`installation ${installationId} has no account.login`);
+  return json.account.login;
 }
 
 async function cmdLogin() {
@@ -182,7 +207,13 @@ async function cmdLogin() {
     await pollDeviceFlow(state, device.device_code, device.interval || 5, device.expires_in);
     clearInterval(tick);
     process.stdout.write("\n");
-    console.error("logged in.");
+    try {
+      state.login = await fetchAuthenticatedLogin(state.access_token);
+      saveState(state);
+      console.error(`logged in as @${state.login}.`);
+    } catch (e) {
+      console.error(`logged in (warning: could not fetch user login: ${e.message}).`);
+    }
   } catch (e) {
     clearInterval(tick);
     process.stdout.write("\n");
@@ -259,7 +290,7 @@ async function cmdBot(args) {
     );
   const pem = readPem();
   const { token } = await installationToken(state.app_id, pem, installationId);
-  const code = await runGhAsBot(args, token);
+  const code = await runGhAsBot(args, token, state.login);
   process.exit(code);
 }
 
@@ -272,6 +303,8 @@ function cmdStatus() {
   console.log(`pem file:      ${pemPath()}`);
   console.log(`app id:        ${state.app_id || "—"}`);
   console.log(`slug:          ${state.slug || "—"}`);
+  console.log(`html url:      ${state.html_url || "—"}`);
+  console.log(`login:         ${state.login ? `@${state.login}` : "—"}`);
   console.log(`client id:     ${state.client_id || "—"}`);
   console.log(
     `installations: ${

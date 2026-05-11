@@ -1,7 +1,7 @@
 {
   "name": "as-me",
-  "description": "Personal scoped GitHub App for @mvhenten — wraps gh and git with App-scoped tokens instead of full OAuth.",
-  "url": "https://github.com/mvhenten",
+  "description": "Scoped GitHub App wrapper for gh and git — manifest-bounded permissions instead of full OAuth.",
+  "url": "https://github.com/kattebak/as-me",
   "public": false,
   "request_oauth_on_install": true,
   "redirect_url": "http://127.0.0.1:8765/manifest-callback",

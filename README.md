@@ -2,8 +2,8 @@
 
 Personal scoped GitHub App wrapper. Replaces `gh auth login` (full OAuth) with a GitHub App that only has `contents`, `pull_requests`, `issues`, `metadata`, `statuses` — nothing else. Two modes:
 
-- **as-me** (default): user-to-server token, acts as @mvhenten.
-- **as-me bot ...** — a.k.a. **🧃 juicebox** / **on-behalf-of** mode: installation token, acts as the App; prepends `🧃 created on behalf of @mvhenten` to PR/issue bodies so reviewers and audit can tell an agent (not the human) opened the PR or wrote the comment.
+- **as-me** (default): user-to-server token, acts as the authenticated user.
+- **as-me bot ...** — a.k.a. **🧃 juicebox** / **on-behalf-of** mode: installation token, acts as the App; prepends `🧃 created on behalf of @<login>` to PR/issue bodies so reviewers and audit can tell an agent (not the human) opened the PR or wrote the comment.
 
 Single-user, runs on your laptop, no deps.
 
@@ -24,12 +24,29 @@ curl -fsSL https://raw.githubusercontent.com/kattebak/as-me/main/install.sh | ba
 Defaults install to `~/.local/share/as-me` with `as-me` symlinked into `~/.local/bin`. Override via `AS_ME_HOME=` / `BIN_DIR=` env vars.
 
 ```sh
-as-me init --org stxgroup                 # creates the GitHub App (manual paste by default)
-as-me install --org stxgroup              # installs it on the org
+as-me init [--org <name>]                 # creates the GitHub App (manual paste by default)
+as-me install [--org <name>]              # installs it on a user or org account
 as-me login                               # user-to-server OAuth (device flow)
 ```
 
 `init` and `install` print a URL and wait. Open it in any browser — your laptop, your phone, an SSH-forwarded session, anywhere — click through, then paste the resulting redirect URL (or just the `code=…` / `installation_id=…` value) back into the CLI. The flow doesn't need an open port, a local browser, or a graphical environment on the machine running `as-me`.
+
+```text
+$ as-me init
+open this URL in any browser to create the GitHub App:
+
+  https://github.com/settings/apps/new?manifest=…
+
+manual mode: complete the flow in any browser.
+when GitHub redirects to 127.0.0.1:8765 (page will fail to load), copy the full URL
+from the address bar and paste below — or just the `code=…` value.
+
+paste: http://127.0.0.1:8765/manifest-callback?code=abc123
+app created: https://github.com/settings/apps/as-me
+next: as-me install
+```
+
+Omit `--org` to create/install under your own account; pass `--org <name>` to target an org you administer.
 
 After `as-me init`, toggle **Enable Device Flow** in the App's settings page (manifest can't set it, so it's a one-time UI click). Without it, `as-me login` will abort with `device_flow_disabled`.
 
@@ -39,18 +56,16 @@ After `init`, secrets live in `~/.config/as-me/` (mode 0600). The private key is
 
 If your browser and the CLI run on the same host and nothing else holds `127.0.0.1:8765`, `as-me init --loopback` / `as-me install --loopback` will spawn a local listener, try to open the URL for you, and capture the callback automatically (no paste step). The default is manual paste because it works everywhere — loopback is faster when it works but assumes local-port reachability that corporate laptops, SSH-only machines, and locked-down networks often don't allow.
 
-### Headless / remote workspaces
+### Remote / headless machines
 
-`as-me login` uses the OAuth device flow — short user code + verification URL, polls GitHub, no port. The default manual-paste `init`/`install` are likewise port-less, so you can run the full bootstrap directly on a headless remote: SSH in, run `as-me init`, open the printed URL in your laptop's browser, paste the redirect URL back into the SSH session. Same for `install`.
-
-If you'd rather bootstrap on your laptop and copy the result over, the state directory is the only thing that needs to move:
+Manual paste already works headless, so bootstrapping on the remote itself is fine. If you'd rather bootstrap on your laptop and copy the result over, only the state dir needs to move:
 
 ```sh
 rsync -a ~/.config/as-me/ remote:.config/as-me/
 ssh remote as-me login
 ```
 
-The state directory holds the App credentials and PEM (mode 0600); `as-me login` on the remote mints its own user token.
+The state dir holds App credentials + PEM (mode 0600); `as-me login` on the remote mints its own user token via device flow.
 
 ## Claude Code skill
 
@@ -68,7 +83,7 @@ The credential helper auto-refreshes when the token is within 5 min of expiry.
 ## Bot mode (a.k.a. 🧃 juicebox / on-behalf-of mode)
 
 ```sh
-as-me bot pr create --title "x" --body "y"   # body becomes "🧃 created on behalf of @mvhenten\n\ny"
+as-me bot pr create --title "x" --body "y"   # body becomes "🧃 created on behalf of @<login>\n\ny"
 as-me bot issue comment 123 --body "ack"     # same prefix
 ```
 
