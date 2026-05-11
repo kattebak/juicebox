@@ -121,10 +121,19 @@ async function cmdInstall(flags) {
   const url = `https://github.com/apps/${state.slug}/installations/new`;
   console.error("open this URL in any browser to install the App:\n");
   console.error(url);
+  if (flags.org) {
+    console.error(
+      `\non the GitHub page, you'll see a list of accounts where you can install.\n` +
+        `pick **${flags.org}** (you must be an Owner of that org for it to appear).\n`,
+    );
+  } else {
+    console.error(
+      `\non the GitHub page, pick your personal account or an org you own.\n`,
+    );
+  }
   console.error(
-    "\non the GitHub page: pick which repositories the App can access. fewer\n" +
-      "repos = smaller juicebox = smaller blast radius if anything goes wrong.\n" +
-      "you can change this later in the App settings. click Install when done.\n" +
+    "then choose which repositories the App can access. fewer repos = smaller\n" +
+      "juicebox = smaller blast radius. you can change this later in App settings.\n" +
       "GitHub will redirect to a paste-helper page; copy the installation id\n" +
       "from there into the prompt below.\n",
   );
@@ -135,10 +144,18 @@ async function cmdInstall(flags) {
   const id = params.installation_id;
   if (!id) throw new Error(`no installation_id in callback: ${JSON.stringify(params)}`);
   const installationId = Number.parseInt(id, 10);
-  const owner = flags.org || (await resolveInstallationOwner(state, installationId));
-  state.installations[owner] = installationId;
+  // Always resolve the actual install owner from the API — the user might pick
+  // a different account on the install page than what --org suggested, and we
+  // don't want to mis-key the state.
+  const actualOwner = await resolveInstallationOwner(state, installationId);
+  if (flags.org && flags.org !== actualOwner) {
+    console.error(
+      `note: --org ${flags.org} was passed but you installed on ${actualOwner}; storing under ${actualOwner}.`,
+    );
+  }
+  state.installations[actualOwner] = installationId;
   saveState(state);
-  console.error(`installed: ${owner} -> ${installationId}`);
+  console.error(`installed: ${actualOwner} -> ${installationId}`);
 }
 
 async function resolveInstallationOwner(state, installationId) {

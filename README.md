@@ -11,7 +11,7 @@ Single-user, runs on your laptop, no deps.
 
 GitHub's web UI gates destructive admin actions behind sudo-mode prompts, confirmation modals, and "type the repo name to confirm" screens. The API does none of that. A token authenticated as you can modify branch protection, add org members, or delete repos in a single curl — no friction, no second look.
 
-That asymmetry was tolerable when CLI tokens were used by humans typing slowly and reading what they typed. With LLM coding agents, it isn't. An agent's context is porous: an instruction injected via a PR description, a fetched webpage, an issue body, or an MCP tool response becomes an action the agent takes on your behalf. The default `gh auth login` token has the same ceiling as your account, so every prompt-injection bug is also a privilege-escalation bug.
+LLM agents turn that API into a privilege-escalation surface. Anything an agent reads — a PR body, an issue, a fetched page, an MCP tool response — can carry instructions the agent then executes. A default `gh auth login` token has your full account ceiling, so every prompt-injection bug is a privilege-escalation bug. If the agent also assumes an OIDC role in CI, the blast radius extends to whatever that role can reach.
 
 `as-me` replaces that token with one bound to a GitHub App whose permission ceiling is fixed in the manifest. It cannot do administration, cannot manage members, cannot touch Actions, cannot read secrets. The ceiling is set once, in code, and applies to every token the App ever mints. Compromise the agent and the worst case is "it can do everything `as-me` declares" — not "everything you can do."
 
