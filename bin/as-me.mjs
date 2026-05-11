@@ -43,9 +43,9 @@ usage:
   127.0.0.1:8765 and auto-receive the callback (only works when the browser
   and the CLI are on the same host and the port is reachable).
 
-  init also accepts --name <slug> and --description <text> to override the
-  manifest defaults (handy if "as-me" is already taken on your account or you
-  want a more specific App identity).
+  init defaults the App name to \`\${USER}-only\` (e.g. mvhenten-only) so each
+  install is single-tenant by convention. Pass --name <slug> to override, or
+  --description <text> for the App description shown in GitHub's UI.
 `;
 
 function openBrowser(url) {
@@ -89,7 +89,11 @@ async function cmdInit(flags) {
   const manifest = JSON.parse(
     readFileSync(join(REPO_ROOT, "manifest.json"), "utf8"),
   );
-  if (flags.name) manifest.name = flags.name;
+  if (flags.name) {
+    manifest.name = flags.name;
+  } else if (process.env.USER) {
+    manifest.name = `${process.env.USER}-only`;
+  }
   if (flags.description) manifest.description = flags.description;
   const state = loadState();
   const base = flags.org

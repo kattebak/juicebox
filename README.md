@@ -52,7 +52,7 @@ REQUIRED before `as-me login`:
 next: as-me install
 ```
 
-Omit `--org` to create/install under your own account; pass `--org <name>` to target an org you administer. Use `--name <slug>` / `--description <text>` on `init` if `as-me` is already taken on your account or you want a different App identity.
+Omit `--org` to create/install under your own account; pass `--org <name>` to target an org you administer. `init` defaults the App name to `${USER}-only` (e.g. `mvhenten-only`) so each install is single-tenant by convention; pass `--name <slug>` to override, or `--description <text>` for the description shown in GitHub's UI.
 
 After `as-me init`, toggle **Enable Device Flow** in the App's settings page (manifest can't set it, so it's a one-time UI click). Without it, `as-me login` will abort with `device_flow_disabled`.
 

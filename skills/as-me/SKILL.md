@@ -27,7 +27,7 @@ Run `as-me status` and parse the output. Map to the next section:
 
 ## 3. `as-me init`
 
-Ask which org to create the App under. Default to personal (omit `--org`). If `as-me` is already taken on the user's account, or they want a more specific App identity, also pass `--name <slug>` and/or `--description <text>`. Run:
+Ask which org to create the App under. Default to personal (omit `--org`). The default App name is `${USER}-only` (e.g. `mvhenten-only`) — single-tenant by convention. Override with `--name <slug>` if the user wants a different identity, or `--description <text>` for the App description shown in GitHub's UI.
 
 ```sh
 as-me init [--org <org>] [--name <slug>] [--description <text>]
