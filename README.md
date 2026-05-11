@@ -18,14 +18,33 @@ That asymmetry was tolerable when CLI tokens were used by humans typing slowly a
 ## Setup
 
 ```sh
-git clone git@github.com:kattebak/as-me.git ~/development/as-me
-cd ~/development/as-me && npm link        # or: ln -s "$PWD/bin/as-me" ~/.local/bin/as-me
-as-me init --org stxgroup                 # creates the GitHub App (browser opens)
-as-me install --org stxgroup              # installs it on the org
-as-me login                               # user-to-server OAuth
+curl -fsSL https://raw.githubusercontent.com/kattebak/as-me/main/install.sh | bash
 ```
 
+Defaults install to `~/.local/share/as-me` with `as-me` symlinked into `~/.local/bin`. Override via `AS_ME_HOME=` / `BIN_DIR=` env vars.
+
+```sh
+as-me init --org stxgroup                 # creates the GitHub App (browser opens)
+as-me install --org stxgroup              # installs it on the org
+as-me login                               # user-to-server OAuth (device flow)
+```
+
+After `as-me init`, toggle **Enable Device Flow** in the App's settings page (manifest can't set it, so it's a one-time UI click). Without it, `as-me login` will abort with `device_flow_disabled`.
+
 After `init`, secrets live in `~/.config/as-me/` (mode 0600). The private key is `private-key.pem`.
+
+## Headless / remote workspaces
+
+`as-me login` uses the OAuth device flow — it prints a short user code and a verification URL, then polls GitHub. Nothing binds to a local port, so it works over SSH with no local browser.
+
+`as-me init` and `as-me install` still open a browser (one-time bootstrap, and the manifest callback needs a loopback redirect). Easiest path: run them on your laptop, then copy the resulting state to the remote:
+
+```sh
+rsync -a ~/.config/as-me/ remote:.config/as-me/
+ssh remote as-me login
+```
+
+The state directory holds the App credentials and PEM (mode 0600); the device-flow login on the remote mints its own user token.
 
 ## Daily use
 
@@ -77,9 +96,10 @@ as-me status                     dump configured state
 
 ## Files
 
-- `bin/as-me` — CLI
+- `bin/as-me.mjs` — CLI
 - `lib/state.mjs` — `~/.config/as-me/state.json` I/O
-- `lib/oauth.mjs` — OAuth + refresh + local callback server
+- `lib/oauth.mjs` — OAuth device flow + refresh + manifest/install callback server
 - `lib/jwt.mjs` — RS256 JWT + installation token
 - `lib/gh-bot.mjs` — `gh` child process + body-prefix injection
 - `manifest.json` — App manifest (permission ceiling)
+- `install.sh` — curl-installable bootstrap
