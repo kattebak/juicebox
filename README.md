@@ -10,7 +10,7 @@ Single-user, runs on your laptop, no deps.
 ## Setup
 
 ```sh
-git clone <this repo> ~/development/as-me
+git clone git@github.com:kattebak/as-me.git ~/development/as-me
 cd ~/development/as-me && npm link        # or: ln -s "$PWD/bin/as-me" ~/.local/bin/as-me
 as-me init --org stxgroup                 # creates the GitHub App (browser opens)
 as-me install --org stxgroup              # installs it on the org
