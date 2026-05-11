@@ -63,6 +63,13 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .
   </div>
   <p class="help">Personal = the App lives under your account, only you install/manage it. Org = lives under the org; teammates with admin can install/manage too.</p>
 
+  <label class="field">Visibility</label>
+  <div class="owner-radios">
+    <label><input type="radio" name="visibility" value="private" checked> Private</label>
+    <label><input type="radio" name="visibility" value="public"> Public</label>
+  </div>
+  <p class="help"><strong>Private</strong> = the App can only be installed on the owner you picked above. Pick this if the App is for a single account. <strong>Public</strong> = installable on any account (yours or anyone else's), but each install is isolated to the installer's chosen repos and the permissions below still apply. Pick this if you want to install on multiple accounts you own (e.g. your personal account <em>and</em> an org). Private can be flipped to public later under <em>App settings → Advanced</em>; the reverse is one-way once anyone else has installed.</p>
+
   <div class="perms">
     <h3>Permissions granted</h3>
     <ul>
@@ -94,6 +101,10 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .
     $('orgname').value = q.get('org');
     $('orgrow').classList.add('show');
     validateOrg($('orgname').value);
+  }
+
+  if (q.get('public') === '1') {
+    document.querySelector('input[name=visibility][value=public]').checked = true;
   }
 
   document.querySelectorAll('input[name=owner]').forEach((r) => {
@@ -147,11 +158,12 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .
       : 'https://github.com/settings/apps/new';
 
     const callbackUrl = 'https://kattebak.github.io/as-me/callback.html';
+    const isPublic = document.querySelector('input[name=visibility]:checked').value === 'public';
     const manifest = {
       name: $('name').value.trim(),
       description: $('desc').value.trim() || 'Scoped GitHub App wrapper for gh and git',
       url: 'https://github.com/kattebak/as-me',
-      public: false,
+      public: isPublic,
       request_oauth_on_install: true,
       redirect_url: callbackUrl,
       callback_urls: [callbackUrl],

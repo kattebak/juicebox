@@ -39,6 +39,8 @@ The user copies the code from the callback page (it also auto-copies to clipboar
 
 **Critical — do this immediately after the App is created, before §5:** open the App's settings page → "Identifying and authorizing users" → toggle **Enable Device Flow** on. The manifest cannot set this flag; without it `as-me login` aborts with `device_flow_disabled`. The exact URL is whatever `as-me init` prints as `app created: …` (also visible later via `as-me status` as `html url`) — don't guess the slug; GitHub appends a suffix when the name is taken.
 
+**Visibility — only matters if the user wants multi-account install:** the wizard defaults to private, meaning the App can only be installed on the owner picked above (single-tenant). If the user wants to install on multiple accounts they own (e.g., personal + an org), they should pick **Public** in the wizard at init time, OR flip it later under *App settings → Advanced → Make public*. Public is safe — each installation is isolated to the installer's chosen repos, the manifest permission ceiling still applies. The CLI accepts `--public` to pre-select Public in the wizard.
+
 ## 4. `as-me install`
 
 ```sh

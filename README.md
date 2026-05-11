@@ -58,6 +58,10 @@ next: as-me install
 
 Omit `--org` to create/install under your own account; pass `--org <name>` to target an org you administer. `init` defaults the App name to `${USER}-only` (e.g. `mvhenten-only`) so each install is single-tenant by convention; pass `--name <slug>` to override, or `--description <text>` for the description shown in GitHub's UI.
 
+### Private vs public
+
+The wizard defaults the App to **private** — it can only be installed on the account that owns it. That fits the single-tenant "this App is mine" intent. If you want to install one App on multiple accounts you own (e.g., personal + an org), pick **Public** in the wizard (or pass `--public` to `as-me init`). Public is safe: each installation is isolated to the installer's chosen repos, and the manifest permission ceiling still applies — "public" only affects who is *able* to install, not what an install can do. You can also flip private → public later under *App settings → Advanced → Make public* (the reverse direction is locked once anyone else has installed).
+
 After `init`, secrets live in `~/.config/as-me/` (mode 0600). The private key is `private-key.pem`.
 
 ### Why a hosted page?

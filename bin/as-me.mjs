@@ -37,8 +37,10 @@ usage:
   back to a 'paste this' page; copy the code into the still-waiting CLI prompt.
 
   init defaults the App name to \`\${USER}-only\` (e.g. mvhenten-only) so each
-  install is single-tenant by convention. Pass --name <slug> to override, or
-  --description <text> for the description shown in GitHub's UI.
+  install is single-tenant by convention. Pass --name <slug> to override,
+  --description <text> for the description shown in GitHub's UI, or --public
+  to pre-select the public-visibility option in the wizard (lets the App be
+  installed on accounts other than the one that owns it).
 `;
 
 function parseFlags(args) {
@@ -54,6 +56,8 @@ function parseFlags(args) {
       flags.name = args[++i];
     } else if (a === "--description") {
       flags.description = args[++i];
+    } else if (a === "--public") {
+      flags.public = true;
     } else if (a === "--help" || a === "-h") {
       flags.help = true;
     } else {
@@ -70,6 +74,7 @@ async function cmdInit(flags) {
   if (defaultName) url.searchParams.set("name", defaultName);
   if (flags.description) url.searchParams.set("desc", flags.description);
   if (flags.org) url.searchParams.set("org", flags.org);
+  if (flags.public) url.searchParams.set("public", "1");
 
   console.error("open this URL in any browser to create your scoped GitHub App:\n");
   console.error(url.toString());
@@ -112,6 +117,14 @@ async function cmdInit(flags) {
   console.error("  2. scroll to 'Identifying and authorizing users'");
   console.error("  3. toggle 'Enable Device Flow' ON, click Save");
   console.error("  (the manifest can't set this; login aborts without it)\n");
+  if (!app.public) {
+    console.error("OPTIONAL — if you want to install this App on accounts other");
+    console.error("than the one that owns it (e.g. personal AND an org you own):");
+    console.error(`  open ${app.html_url}/advanced`);
+    console.error("  scroll to the bottom, click 'Make public'");
+    console.error("  (private Apps install only on the owning account; public");
+    console.error("   is safe — each install is isolated, manifest perms apply.)\n");
+  }
   console.error(`next: as-me install${flags.org ? ` --org ${flags.org}` : ""}`);
 }
 
