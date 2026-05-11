@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import { randomBytes } from "node:crypto";
 import { spawn, execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -14,8 +13,9 @@ import {
 } from "../lib/state.mjs";
 import {
   runCallbackServer,
-  exchangeCode,
   refreshIfNeeded,
+  startDeviceFlow,
+  pollDeviceFlow,
 } from "../lib/oauth.mjs";
 import { installationToken } from "../lib/jwt.mjs";
 import { runGhAsBot } from "../lib/gh-bot.mjs";
@@ -131,19 +131,45 @@ async function cmdLogin() {
   const state = loadState();
   if (!state.client_id)
     throw new Error("no app configured; run `as-me init` first");
-  const nonce = randomBytes(16).toString("hex");
-  const url =
-    `https://github.com/login/oauth/authorize` +
-    `?client_id=${encodeURIComponent(state.client_id)}` +
-    `&redirect_uri=${encodeURIComponent("http://127.0.0.1:8765/callback")}` +
-    `&state=${nonce}`;
-  console.error("opening browser to authorize…");
-  openBrowser(url);
-  const { params } = await runCallbackServer({ path: "/callback", port: 8765 });
-  if (params.state !== nonce) throw new Error("state mismatch");
-  if (!params.code) throw new Error("no code in callback");
-  await exchangeCode(state, params.code);
-  console.error("logged in.");
+  let device;
+  try {
+    device = await startDeviceFlow(state.client_id);
+  } catch (e) {
+    if (e.code === "device_flow_disabled") {
+      throw new Error(
+        `Enable 'Device Flow' in your App's settings at https://github.com/settings/apps/${state.slug} and re-run \`as-me login\`.`,
+      );
+    }
+    throw e;
+  }
+  const verifyUrl = device.verification_uri || "https://github.com/login/device";
+  const mins = Math.floor(device.expires_in / 60);
+  const line = `Open ${verifyUrl} and enter code: ${device.user_code}  (waiting for authorization, expires in ${mins}m...)`;
+  process.stdout.write(line);
+  const tick = setInterval(() => {
+    process.stdout.write(`\r${line}`);
+  }, 5000);
+  try {
+    await pollDeviceFlow(state, device.device_code, device.interval || 5, device.expires_in);
+    clearInterval(tick);
+    process.stdout.write("\n");
+    console.error("logged in.");
+  } catch (e) {
+    clearInterval(tick);
+    process.stdout.write("\n");
+    if (e.code === "expired_token") {
+      throw new Error("device code expired; re-run `as-me login`");
+    }
+    if (e.code === "access_denied") {
+      throw new Error("authorization denied");
+    }
+    if (e.code === "device_flow_disabled") {
+      throw new Error(
+        `Enable 'Device Flow' in your App's settings at https://github.com/settings/apps/${state.slug} and re-run \`as-me login\`.`,
+      );
+    }
+    throw e;
+  }
 }
 
 async function cmdEnv() {
