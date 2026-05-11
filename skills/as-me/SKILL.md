@@ -33,13 +33,11 @@ Ask which org to create the App under. Default to personal (omit `--org`). The d
 as-me init [--org <org>] [--name <slug>] [--description <text>]
 ```
 
-The CLI writes a tiny self-submitting HTML form to `/tmp/as-me-init-*/manifest.html` and prints its `file://…` path. Tell the user: open that file in any browser. The form POSTs the manifest to GitHub (a GET URL with `?manifest=…` does *not* work — GitHub silently ignores manifest GET params and shows the blank manual-create form). On the GitHub page, all fields are pre-filled; the user should scroll to the bottom and click **Create GitHub App** without editing anything.
+The CLI prints a URL to `https://kattebak.github.io/as-me/init.html?name=…&org=…` (a hosted setup wizard in this repo's GitHub Pages). Tell the user: open the URL in any browser — laptop, phone, anywhere. The page lets them review/edit the App name and owner, shows exactly which permissions are being granted (locked by the manifest, not editable), and submits to GitHub when they click **Create GitHub App**. GitHub then redirects to `callback.html` which displays a copy-friendly "paste this back" code box.
 
-If the user's browser is on a different machine (SSH session), tell them to `scp` the HTML file over first — the CLI prints the exact command. After clicking Create, the browser redirects to a `127.0.0.1:8765` URL that fails to load — that's expected. They copy the full URL from the address bar (or just the `code=…` value) and paste it into the still-waiting CLI prompt.
+The user copies the code from the callback page (it also auto-copies to clipboard on load) and pastes it into the still-waiting CLI prompt. The CLI exchanges the code for the App's PEM + client secret and saves them.
 
 **Critical — do this immediately after the App is created, before §5:** open the App's settings page → "Identifying and authorizing users" → toggle **Enable Device Flow** on. The manifest cannot set this flag; without it `as-me login` aborts with `device_flow_disabled`. The exact URL is whatever `as-me init` prints as `app created: …` (also visible later via `as-me status` as `html url`) — don't guess the slug; GitHub appends a suffix when the name is taken.
-
-**Same-host shortcut:** if the user is on a graphical machine where `127.0.0.1:8765` is reachable from their browser, `as-me init --loopback` runs a local listener and auto-captures the callback (no paste). Skip the flag if unsure — the default works in every environment.
 
 ## 4. `as-me install`
 
@@ -47,7 +45,7 @@ If the user's browser is on a different machine (SSH session), tell them to `scp
 as-me install [--org <org>]
 ```
 
-Same shape as §3: CLI prints a `https://github.com/apps/<slug>/installations/new` URL, user opens it in a browser. **On the GitHub page**, the user picks which repositories the App can access — fewer repos = smaller blast radius; this can be changed later. After clicking Install, they paste the redirect URL (containing `installation_id=…`) back. `--loopback` works here too.
+CLI prints `https://github.com/apps/<slug>/installations/new` directly (no setup wizard needed — GitHub's own install page is fine). **On the GitHub page**, the user picks which repositories the App can access — fewer repos = smaller blast radius; this can be changed later. After clicking Install, GitHub redirects to the same `callback.html` page, which now displays the `installation_id`. User pastes that back into the CLI prompt.
 
 ## 5. `as-me login`
 

@@ -29,18 +29,22 @@ as-me install [--org <name>]              # installs it on a user or org account
 as-me login                               # user-to-server OAuth (device flow)
 ```
 
-`init` writes a tiny HTML form to `/tmp` and prints its `file://` path. Open it in any browser — your laptop, your phone, an SSH-forwarded session, anywhere — and the form auto-POSTs the manifest to GitHub. After you click "Create GitHub App", the browser will redirect to a `127.0.0.1:8765` URL that fails to load — paste that failed URL (or just the `code=…` value) back at the CLI prompt. `install` works the same way but uses a regular GitHub URL (no form needed). Neither needs an open port, a local browser, or a graphical environment on the machine running `as-me`. If your browser is on a different machine, `scp` the HTML over first — the CLI prints the exact command.
+`init` prints a URL to a hosted setup wizard at [kattebak.github.io/as-me/init.html](https://kattebak.github.io/as-me/init.html). Open it in any browser — laptop, phone, SSH session, anywhere. The page lets you review/edit the App name and owner, shows the locked permission ceiling, and submits the manifest to GitHub when you click **Create GitHub App**. GitHub redirects to a callback page that displays a copy-friendly "paste this back" code box (it also auto-copies to your clipboard). Paste that into the CLI's still-waiting `paste:` prompt and the App is set up. `install` works the same way: GitHub's install page handles the picker, then redirects to the same callback helper.
+
+The flow doesn't need an open port, a local browser, or a graphical environment on the machine running `as-me`. HTTPS end-to-end, no loopback redirects, no file:// dancing.
 
 ```text
 $ as-me init
-open this HTML file in any browser:
+open this URL in any browser to create your scoped GitHub App:
 
-file:///tmp/as-me-init-XXXX/manifest.html
+https://kattebak.github.io/as-me/init.html?name=mvhenten-only
 
-it auto-submits the manifest to GitHub via POST. on the GitHub page,
-scroll to the bottom and click 'Create GitHub App' …
+the page is the setup wizard — review the App name/owner, see exactly which
+permissions are being granted (locked by manifest), click 'Create GitHub App'.
+GitHub will redirect you to a small paste-helper page; copy the code from
+there into the prompt below.
 
-paste: http://127.0.0.1:8765/manifest-callback?code=abc123
+paste: ████████████████████████████
 
 app created: https://github.com/settings/apps/mvhenten-only
 
@@ -52,21 +56,21 @@ REQUIRED before `as-me login`:
 next: as-me install
 ```
 
-(GitHub's manifest flow requires POST: a GET URL with `?manifest=…` is silently ignored and you'd see the blank manual-create form. That's why `init` writes an auto-submitting form instead of just printing a URL.)
-
 Omit `--org` to create/install under your own account; pass `--org <name>` to target an org you administer. `init` defaults the App name to `${USER}-only` (e.g. `mvhenten-only`) so each install is single-tenant by convention; pass `--name <slug>` to override, or `--description <text>` for the description shown in GitHub's UI.
-
-After `as-me init`, toggle **Enable Device Flow** in the App's settings page (manifest can't set it, so it's a one-time UI click). Without it, `as-me login` will abort with `device_flow_disabled`.
 
 After `init`, secrets live in `~/.config/as-me/` (mode 0600). The private key is `private-key.pem`.
 
-### Same-host shortcut (`--loopback`)
+### Why a hosted page?
 
-If your browser and the CLI run on the same host and nothing else holds `127.0.0.1:8765`, `as-me init --loopback` / `as-me install --loopback` will spawn a local listener, try to open the URL for you, and capture the callback automatically (no paste step). The default is manual paste because it works everywhere — loopback is faster when it works but assumes local-port reachability that corporate laptops, SSH-only machines, and locked-down networks often don't allow.
+GitHub's App-manifest flow requires the manifest to be submitted as the body of a POST to `https://github.com/settings/apps/new`. A GET URL with `?manifest=…` is silently ignored; a local `file://` form works only when your browser is on the same machine as the CLI; and a loopback redirect (`http://127.0.0.1:8765/…`) gets blocked in many browsers as an HTTPS→HTTP downgrade. A small hosted page solves all three problems cleanly.
+
+The page is two static HTML files in this repo at `docs/init.html` and `docs/callback.html`, served via GitHub Pages. They take no credentials and run no backend; the wizard just builds the manifest JSON from the form fields and submits it to github.com directly. Source is auditable; nothing is logged anywhere.
+
+If you'd rather not depend on `kattebak.github.io` (fork-and-host scenarios, air-gapped networks, etc.), fork this repo, enable Pages on your fork, and update `PAGES_BASE` in `bin/as-me.mjs` to your fork's URL.
 
 ### Remote / headless machines
 
-Manual paste already works headless, so bootstrapping on the remote itself is fine. If you'd rather bootstrap on your laptop and copy the result over, only the state dir needs to move:
+The Pages flow already works headless — run `as-me init` on the remote, open the URL on your laptop, paste the code back into the SSH session. If you'd rather bootstrap on your laptop and copy the result over, only the state dir needs to move:
 
 ```sh
 rsync -a ~/.config/as-me/ remote:.config/as-me/
@@ -120,8 +124,8 @@ On Enterprise Cloud, lift the same toggles to `Enterprise → Policies → Perso
 ## Commands
 
 ```
-as-me init [--org <name>] [--loopback]      create App from manifest (paste-back by default)
-as-me install [--org <name>] [--loopback]   install App, capture installation_id
+as-me init [--org <name>]                   create App from manifest (hosted wizard + paste-back)
+as-me install [--org <name>]                install App, capture installation_id
 as-me login                                 user OAuth (refresh-capable, device flow)
 as-me env                                   print export lines for eval
 as-me git-credential <op>                   git credential helper protocol
