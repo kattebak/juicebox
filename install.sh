@@ -27,6 +27,17 @@ fi
 chmod +x "$AS_ME_HOME/bin/as-me.mjs"
 ln -sfn "$AS_ME_HOME/bin/as-me.mjs" "$BIN_DIR/as-me"
 
+SKILL_DIR="${SKILL_DIR:-$HOME/.claude/skills/as-me}"
+SKILL_SRC="$AS_ME_HOME/skills/as-me"
+
+if [ -e "$SKILL_DIR" ] && [ ! -L "$SKILL_DIR" ]; then
+  echo "note: $SKILL_DIR exists and is not a symlink — leaving as-is"
+elif [ -d "$SKILL_SRC" ]; then
+  mkdir -p "$(dirname "$SKILL_DIR")"
+  ln -sfn "$SKILL_SRC" "$SKILL_DIR"
+  echo "linked Claude Code skill: /as-me"
+fi
+
 case ":$PATH:" in
   *":$BIN_DIR:"*) ;;
   *) echo "note: $BIN_DIR is not on PATH; add it with:"

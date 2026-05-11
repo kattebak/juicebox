@@ -46,6 +46,10 @@ ssh remote as-me login
 
 The state directory holds the App credentials and PEM (mode 0600); the device-flow login on the remote mints its own user token.
 
+## Claude Code skill
+
+The canonical skill lives at `skills/as-me/SKILL.md` in this repo — framework-agnostic, so any agent runtime that reads SKILL-style markdown can point at it directly. The installer symlinks it into `~/.claude/skills/as-me/` for Claude Code specifically; in a fresh conversation type `/as-me` and the skill walks the agent through install → init → device-flow toggle reminder → install → login → shell + git wiring → verify, using `as-me status` to figure out where you are. Override the link target with `SKILL_DIR=…` if you keep skills elsewhere; users on other runtimes can ignore the symlink and point their runtime at the in-repo path.
+
 ## Daily use
 
 ```sh
@@ -103,3 +107,4 @@ as-me status                     dump configured state
 - `lib/gh-bot.mjs` — `gh` child process + body-prefix injection
 - `manifest.json` — App manifest (permission ceiling)
 - `install.sh` — curl-installable bootstrap
+- `skills/as-me/SKILL.md` — framework-agnostic agent skill for guided setup
