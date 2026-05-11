@@ -179,27 +179,23 @@ async function cmdLogin() {
     }
     throw e;
   }
-  const verifyUrl = device.verification_uri || "https://github.com/login/device";
+  const baseUrl = device.verification_uri || "https://github.com/login/device";
+  const fullUrl = `${baseUrl}?user_code=${encodeURIComponent(device.user_code)}`;
   const mins = Math.floor(device.expires_in / 60);
-  const line = `Open ${verifyUrl} and enter code: ${device.user_code}  (waiting for authorization, expires in ${mins}m...)`;
-  process.stdout.write(line);
-  const tick = setInterval(() => {
-    process.stdout.write(`\r${line}`);
-  }, 5000);
+  console.error(`open this URL to authorize as-me (code ${device.user_code}, expires in ${mins}m):\n`);
+  console.error(`  ${fullUrl}\n`);
+  console.error("the code is pre-filled via the URL — just click 'Continue', then 'Authorize'.");
+  console.error("waiting...");
   try {
     await pollDeviceFlow(state, device.device_code, device.interval || 5, device.expires_in);
-    clearInterval(tick);
-    process.stdout.write("\n");
     try {
       state.login = await fetchAuthenticatedLogin(state.access_token);
       saveState(state);
-      console.error(`logged in as @${state.login}.`);
+      console.error(`\nlogged in as @${state.login}.`);
     } catch (e) {
-      console.error(`logged in (warning: could not fetch user login: ${e.message}).`);
+      console.error(`\nlogged in (warning: could not fetch user login: ${e.message}).`);
     }
   } catch (e) {
-    clearInterval(tick);
-    process.stdout.write("\n");
     if (e.code === "expired_token") {
       throw new Error("device code expired; re-run `as-me login`");
     }
