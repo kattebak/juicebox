@@ -1,0 +1,12 @@
+{
+  "name": "as-me",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "as-me": "./bin/as-me"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

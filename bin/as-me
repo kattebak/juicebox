@@ -1,0 +1,270 @@
+#!/usr/bin/env node
+import { randomBytes } from "node:crypto";
+import { spawn, execSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import {
+  loadState,
+  saveState,
+  statePath,
+  pemPath,
+  writePem,
+  readPem,
+} from "../lib/state.mjs";
+import {
+  runCallbackServer,
+  exchangeCode,
+  refreshIfNeeded,
+} from "../lib/oauth.mjs";
+import { installationToken } from "../lib/jwt.mjs";
+import { runGhAsBot } from "../lib/gh-bot.mjs";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = join(__dirname, "..");
+
+const HELP = `as-me — scoped GitHub App wrapper
+
+usage:
+  as-me init [--org <name>]        create the GitHub App via manifest flow
+  as-me install [--org <name>]     install the App on user or org
+  as-me login                      OAuth user-to-server login
+  as-me env                        print export GH_TOKEN=... for eval
+  as-me git-credential <op>        git credential helper (get/store/erase)
+  as-me bot <gh-args...>           run gh with an installation token (as the App)
+  as-me status                     show what is configured
+  as-me --help                     this help
+`;
+
+function openBrowser(url) {
+  const cmd =
+    process.platform === "darwin"
+      ? "open"
+      : process.platform === "win32"
+        ? "start"
+        : "xdg-open";
+  try {
+    spawn(cmd, [url], { stdio: "ignore", detached: true }).unref();
+  } catch {}
+  console.error(`open: ${url}`);
+}
+
+function parseFlags(args) {
+  const flags = {};
+  const rest = [];
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === "--org") {
+      flags.org = args[++i];
+    } else if (a === "--bot") {
+      flags.bot = true;
+    } else if (a === "--help" || a === "-h") {
+      flags.help = true;
+    } else {
+      rest.push(a);
+    }
+  }
+  return { flags, rest };
+}
+
+async function cmdInit(flags) {
+  const manifest = JSON.parse(
+    readFileSync(join(REPO_ROOT, "manifest.json"), "utf8"),
+  );
+  const state = loadState();
+  const base = flags.org
+    ? `https://github.com/organizations/${flags.org}/settings/apps/new`
+    : `https://github.com/settings/apps/new`;
+  const url = `${base}?manifest=${encodeURIComponent(JSON.stringify(manifest))}`;
+  console.error("opening browser to create GitHub App from manifest…");
+  openBrowser(url);
+  const { params } = await runCallbackServer({
+    path: "/manifest-callback",
+    port: 8765,
+  });
+  if (!params.code) throw new Error("no code in manifest callback");
+  const res = await fetch(
+    `https://api.github.com/app-manifests/${params.code}/conversions`,
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "as-me",
+      },
+    },
+  );
+  const body = await res.text();
+  if (!res.ok) throw new Error(`manifest conversion ${res.status}: ${body}`);
+  const app = JSON.parse(body);
+  state.app_id = app.id;
+  state.slug = app.slug;
+  state.client_id = app.client_id;
+  state.client_secret = app.client_secret;
+  state.webhook_secret = app.webhook_secret;
+  state.html_url = app.html_url;
+  if (app.pem) writePem(app.pem);
+  saveState(state);
+  console.error(`app created: ${app.html_url}`);
+  console.error(`next: as-me install${flags.org ? ` --org ${flags.org}` : ""}`);
+}
+
+async function cmdInstall(flags) {
+  const state = loadState();
+  if (!state.slug) throw new Error("no app configured; run `as-me init` first");
+  const url = `https://github.com/apps/${state.slug}/installations/new`;
+  console.error("opening browser to install app…");
+  openBrowser(url);
+  const { params } = await runCallbackServer({
+    path: ["/callback", "/manifest-callback"],
+    port: 8765,
+  });
+  const id = params.installation_id;
+  if (!id) throw new Error(`no installation_id in callback: ${JSON.stringify(params)}`);
+  const owner = flags.org || "mvhenten";
+  state.installations[owner] = Number.parseInt(id, 10);
+  saveState(state);
+  console.error(`installed: ${owner} -> ${id}`);
+}
+
+async function cmdLogin() {
+  const state = loadState();
+  if (!state.client_id)
+    throw new Error("no app configured; run `as-me init` first");
+  const nonce = randomBytes(16).toString("hex");
+  const url =
+    `https://github.com/login/oauth/authorize` +
+    `?client_id=${encodeURIComponent(state.client_id)}` +
+    `&redirect_uri=${encodeURIComponent("http://127.0.0.1:8765/callback")}` +
+    `&state=${nonce}`;
+  console.error("opening browser to authorize…");
+  openBrowser(url);
+  const { params } = await runCallbackServer({ path: "/callback", port: 8765 });
+  if (params.state !== nonce) throw new Error("state mismatch");
+  if (!params.code) throw new Error("no code in callback");
+  await exchangeCode(state, params.code);
+  console.error("logged in.");
+}
+
+async function cmdEnv() {
+  const state = loadState();
+  const token = await refreshIfNeeded(state);
+  process.stdout.write(
+    `export GH_TOKEN=${token}\nexport GITHUB_TOKEN=${token}\n`,
+  );
+}
+
+async function cmdGitCredential(op) {
+  if (op !== "get") {
+    process.exit(0);
+  }
+  // read key=value lines from stdin until blank
+  const chunks = [];
+  for await (const c of process.stdin) chunks.push(c);
+  const input = Buffer.concat(chunks).toString("utf8");
+  const fields = {};
+  for (const line of input.split("\n")) {
+    const idx = line.indexOf("=");
+    if (idx > 0) fields[line.slice(0, idx)] = line.slice(idx + 1);
+  }
+  if (fields.host && fields.host !== "github.com") {
+    // not our host; print nothing
+    return;
+  }
+  const state = loadState();
+  const token = await refreshIfNeeded(state);
+  process.stdout.write(`username=x-access-token\npassword=${token}\n\n`);
+}
+
+function gitRemoteOwner() {
+  const out = execSync("git config --get remote.origin.url", {
+    encoding: "utf8",
+  }).trim();
+  // Handle SSH (git@github.com:owner/repo.git) and HTTPS
+  let m = out.match(/[:/]([^/:]+)\/([^/]+?)(?:\.git)?$/);
+  if (!m) throw new Error(`could not parse remote: ${out}`);
+  return m[1];
+}
+
+async function cmdBot(args) {
+  const state = loadState();
+  if (!state.app_id) throw new Error("no app; run `as-me init`");
+  let owner;
+  try {
+    owner = gitRemoteOwner();
+  } catch (e) {
+    throw new Error(
+      `bot mode needs a git repo with origin remote: ${e.message}`,
+    );
+  }
+  const installationId = state.installations[owner];
+  if (!installationId)
+    throw new Error(
+      `no installation for ${owner}; run \`as-me install --org ${owner}\``,
+    );
+  const pem = readPem();
+  const { token } = await installationToken(state.app_id, pem, installationId);
+  const code = await runGhAsBot(args, token);
+  process.exit(code);
+}
+
+function cmdStatus() {
+  const state = loadState();
+  const now = Math.floor(Date.now() / 1000);
+  const fmt = (t) =>
+    t ? `${new Date(t * 1000).toISOString()} (${t - now}s)` : "—";
+  console.log(`state file:    ${statePath()}`);
+  console.log(`pem file:      ${pemPath()}`);
+  console.log(`app id:        ${state.app_id || "—"}`);
+  console.log(`slug:          ${state.slug || "—"}`);
+  console.log(`client id:     ${state.client_id || "—"}`);
+  console.log(
+    `installations: ${
+      Object.keys(state.installations).length
+        ? JSON.stringify(state.installations)
+        : "—"
+    }`,
+  );
+  console.log(`access token:  ${state.access_token ? "set" : "—"}`);
+  console.log(`  expires:     ${fmt(state.expires_at)}`);
+  console.log(`  refresh exp: ${fmt(state.refresh_token_expires_at)}`);
+}
+
+async function main() {
+  const argv = process.argv.slice(2);
+  if (argv.length === 0 || argv[0] === "--help" || argv[0] === "-h") {
+    process.stdout.write(HELP);
+    return;
+  }
+  const sub = argv[0];
+  const rest = argv.slice(1);
+  const { flags, rest: positional } = parseFlags(rest);
+  if (flags.help) {
+    process.stdout.write(HELP);
+    return;
+  }
+  switch (sub) {
+    case "init":
+      return cmdInit(flags);
+    case "install":
+      return cmdInstall(flags);
+    case "login":
+      return cmdLogin();
+    case "env":
+      return cmdEnv();
+    case "git-credential":
+      return cmdGitCredential(positional[0]);
+    case "bot":
+      return cmdBot(positional);
+    case "status":
+      return cmdStatus();
+    default:
+      process.stderr.write(`unknown command: ${sub}\n\n${HELP}`);
+      process.exit(2);
+  }
+}
+
+main().catch((e) => {
+  process.stderr.write(`error: ${e.message}\n`);
+  process.exit(1);
+});

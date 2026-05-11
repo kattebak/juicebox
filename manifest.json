@@ -1,0 +1,17 @@
+{
+  "name": "as-me",
+  "description": "Personal scoped GitHub App for @mvhenten — wraps gh and git with App-scoped tokens instead of full OAuth.",
+  "url": "https://github.com/mvhenten",
+  "public": false,
+  "request_oauth_on_install": true,
+  "redirect_url": "http://127.0.0.1:8765/manifest-callback",
+  "callback_urls": ["http://127.0.0.1:8765/callback"],
+  "default_events": [],
+  "default_permissions": {
+    "contents": "write",
+    "pull_requests": "write",
+    "issues": "write",
+    "metadata": "read",
+    "statuses": "write"
+  }
+}
