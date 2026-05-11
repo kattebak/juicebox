@@ -1,6 +1,6 @@
 ---
 name: as-me
-description: Install and set up the `as-me` GitHub App wrapper. Replaces full-privilege OAuth tokens with manifest-scoped App credentials for `git` and `gh`. Use when the user asks to install or configure `as-me`, or wants scoped GitHub credentials on this machine.
+description: Install and set up the `as-me` GitHub App wrapper. Replaces full-privilege OAuth tokens with manifest-scoped App credentials for `git` and `gh`. Use when the user asks to install or configure `as-me`, wants scoped GitHub credentials on this machine, or refers to 🧃 juicebox / on-behalf-of / bot mode (the agent-attribution wrapper around `gh`).
 ---
 
 End state: `gh` and `git push` use a manifest-scoped App token instead of a full-privilege OAuth token. `as-me status` is the source of truth for where the user is in setup — run it whenever you're unsure which step to drive next.
@@ -83,5 +83,5 @@ Should print the user's GitHub login. On 401, re-run §5.
 ## Notes
 
 - Never `cat` or print `~/.config/as-me/private-key.pem` or `~/.config/as-me/state.json` — they hold the App private key.
-- Bot mode (`as-me bot <gh-args>`) is user-invoked. Don't switch into it unilaterally.
+- Bot mode (`as-me bot <gh-args>`) — a.k.a. **🧃 juicebox** / **on-behalf-of** mode — runs `gh` as the App and prepends `🧃 created on behalf of @<user>` to PR/issue bodies, signalling to reviewers that the action came from an agent. User-invoked: don't switch into it unilaterally. If a user says "use juicebox" / "post that on-behalf-of", they mean `as-me bot`.
 - If the user is an org admin and asks about hardening the org against classic PATs / OAuth `gh`, point them to the **Org-side lockdown** section in the repo's README — only if they ask, and only if it applies to them.

@@ -3,7 +3,7 @@
 Personal scoped GitHub App wrapper. Replaces `gh auth login` (full OAuth) with a GitHub App that only has `contents`, `pull_requests`, `issues`, `metadata`, `statuses` — nothing else. Two modes:
 
 - **as-me** (default): user-to-server token, acts as @mvhenten.
-- **as-me bot ...**: installation token, acts as the App; prepends `🧃 created on behalf of @mvhenten` to PR/issue bodies.
+- **as-me bot ...** — a.k.a. **🧃 juicebox** / **on-behalf-of** mode: installation token, acts as the App; prepends `🧃 created on behalf of @mvhenten` to PR/issue bodies so reviewers and audit can tell an agent (not the human) opened the PR or wrote the comment.
 
 Single-user, runs on your laptop, no deps.
 
@@ -59,14 +59,16 @@ git config --global credential.https://github.com.helper '!as-me git-credential'
 
 The credential helper auto-refreshes when the token is within 5 min of expiry.
 
-## Bot mode
+## Bot mode (a.k.a. 🧃 juicebox / on-behalf-of mode)
 
 ```sh
 as-me bot pr create --title "x" --body "y"   # body becomes "🧃 created on behalf of @mvhenten\n\ny"
 as-me bot issue comment 123 --body "ack"     # same prefix
 ```
 
-Bot picks the installation by reading the current repo's `origin` remote and looking up the owner in state.
+The 🧃 prefix is the point: anything an agent (or you, deliberately) opens via `as-me bot` is visibly attributed to the App, not to you. Reviewers and audit logs can tell at a glance which PRs/issues/comments were agent-initiated. The colloquial name is "juicebox mode" (from the 🧃) — when you hear "post that on-behalf-of" or "use juicebox", it means this.
+
+Bot picks the installation by reading the current repo's `origin` remote and looking up the owner in state. The juicebox prefix only applies to body-bearing `gh` subcommands (`pr create`, `issue create`, `pr comment`, `issue comment`, `pr review`); all other `gh` calls under `as-me bot` run unchanged with the installation token.
 
 ## Security model
 
@@ -94,7 +96,7 @@ as-me install [--org <name>]     install App, capture installation_id
 as-me login                      user OAuth (refresh-capable)
 as-me env                        print export lines for eval
 as-me git-credential <op>        git credential helper protocol
-as-me bot <gh-args...>           run gh as the App
+as-me bot <gh-args...>           run gh as the App (🧃 juicebox / on-behalf-of mode)
 as-me status                     dump configured state
 ```
 
