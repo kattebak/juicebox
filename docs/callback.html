@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>as-me — paste this back</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root { --accent:#ff9933; --border:#d4d4d4; --muted:#6e6e6e; --bg:#fafafa; --ok:#2da44e; --err:#cf222e; }
+* { box-sizing: border-box; }
+body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; max-width: 38rem; margin: 2rem auto; padding: 0 1rem; color: #222; line-height: 1.5; }
+h1 { font-size: 1.4rem; margin: 0 0 .5rem; }
+h1 .juice { font-size: 1.7rem; }
+.subtitle { color: var(--muted); margin: 0 0 1.5rem; }
+.value-box { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1rem; word-break: break-all; user-select: all; margin: 0 0 .75rem; }
+.value-box.empty { color: var(--muted); font-style: italic; font-family: inherit; }
+.row { display: flex; gap: .75rem; align-items: center; margin: .5rem 0 2rem; }
+button.copy { font: inherit; font-weight: 600; padding: .55rem 1.25rem; background: var(--accent); color: white; border: none; border-radius: 6px; cursor: pointer; }
+button.copy:hover { filter: brightness(0.95); }
+button.copy:disabled { background: #ccc; cursor: not-allowed; }
+.copied { color: var(--ok); font-size: .9rem; }
+.next { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; }
+.next h3 { margin: 0 0 .5rem; font-size: .95rem; }
+.next ol { margin: .25rem 0 0; padding-left: 1.25rem; }
+.next li { margin: .35rem 0; }
+.next code, code.inline { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9em; background: white; padding: 2px 6px; border-radius: 3px; border: 1px solid #eaeaea; }
+.warn { background: #fff8e1; border: 1px solid #f0c674; border-radius: 8px; padding: 1rem 1.25rem; margin: 1.5rem 0; font-size: .9rem; }
+a { color: #0969da; }
+</style>
+</head>
+<body>
+<h1 id="title"><span class="juice">🧃</span> as-me</h1>
+<p class="subtitle" id="subtitle">Paste this back at your terminal.</p>
+
+<div class="value-box" id="value"></div>
+<div class="row">
+  <button class="copy" id="copy">Copy</button>
+  <span class="copied" id="copied" style="display:none">copied ✓</span>
+</div>
+
+<div class="next" id="next"></div>
+
+<script>
+(() => {
+  const q = new URLSearchParams(location.search);
+  const $ = (id) => document.getElementById(id);
+
+  const code = q.get('code');
+  const installationId = q.get('installation_id');
+  const setupAction = q.get('setup_action');
+  const error = q.get('error');
+
+  if (error) {
+    $('title').innerHTML = '<span class="juice">🧃</span> as-me — error from GitHub';
+    $('subtitle').textContent = q.get('error_description') || error;
+    $('value').className = 'value-box empty';
+    $('value').textContent = '(no code returned)';
+    $('copy').disabled = true;
+    $('next').innerHTML = '<h3>What to do</h3><p>Cancel the current <code class="inline">as-me</code> command (Ctrl-C) and retry. If the error mentions a name conflict, pass <code class="inline">--name &lt;different-slug&gt;</code>.</p>';
+    return;
+  }
+
+  const isInstall = !!installationId;
+  const value = isInstall ? installationId : code;
+
+  if (!value) {
+    $('title').innerHTML = '<span class="juice">🧃</span> as-me';
+    $('subtitle').textContent = 'No code in the URL — were you redirected here from GitHub?';
+    $('value').className = 'value-box empty';
+    $('value').textContent = '(empty — expected ?code=… or ?installation_id=…)';
+    $('copy').disabled = true;
+    $('next').innerHTML = '<h3>This page is the callback target for the as-me setup flow.</h3><p>If you arrived here directly, that\'s fine — it just means there\'s nothing to paste. Run <code class="inline">as-me init</code> from your terminal to start.</p>';
+    return;
+  }
+
+  $('value').textContent = value;
+  $('value').className = 'value-box';
+
+  if (isInstall) {
+    document.title = 'as-me — installation_id';
+    $('title').innerHTML = '<span class="juice">🧃</span> as-me — App installed';
+    $('subtitle').textContent = setupAction === 'update'
+      ? 'Installation updated. Paste the id below back at your terminal.'
+      : 'App installed on your account/org. Paste the installation id back at your terminal.';
+    $('next').innerHTML = `<h3>Back in your terminal</h3>
+      <ol>
+        <li>Paste the value above at the <code>paste:</code> prompt of <code class="inline">as-me install</code>.</li>
+        <li>Then run <code class="inline">as-me login</code> to mint your user token.</li>
+      </ol>`;
+  } else {
+    document.title = 'as-me — manifest code';
+    $('title').innerHTML = '<span class="juice">🧃</span> as-me — App created!';
+    $('subtitle').textContent = 'Paste the temporary code below into your terminal — it\'s good for ~10 minutes.';
+    $('next').innerHTML = `<h3>Back in your terminal</h3>
+      <ol>
+        <li>Paste the value above at the <code>paste:</code> prompt of <code class="inline">as-me init</code>.</li>
+        <li>Open the App's settings page (URL printed by the CLI), find <strong>Identifying and authorizing users</strong>, toggle <strong>Enable Device Flow</strong> on.</li>
+        <li>Run <code class="inline">as-me install</code>, then <code class="inline">as-me login</code>.</li>
+      </ol>`;
+  }
+
+  $('copy').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+      $('copied').style.display = 'inline';
+      setTimeout(() => { $('copied').style.display = 'none'; }, 2500);
+    } catch (e) {
+      $('copy').textContent = '(select & copy manually)';
+    }
+  });
+
+  setTimeout(() => {
+    navigator.clipboard.writeText(value).then(
+      () => { $('copied').style.display = 'inline'; $('copied').textContent = 'copied automatically ✓'; },
+      () => {},
+    );
+  }, 200);
+})();
+</script>
+</body>
+</html>

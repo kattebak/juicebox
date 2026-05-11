@@ -1,9 +1,5 @@
 #!/usr/bin/env node
-import { spawn, execSync } from "node:child_process";
-import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { execSync } from "node:child_process";
 import {
   loadState,
   saveState,
@@ -13,7 +9,6 @@ import {
   readPem,
 } from "../lib/state.mjs";
 import {
-  runCallbackServer,
   promptCallbackUrl,
   refreshIfNeeded,
   startDeviceFlow,
@@ -23,75 +18,28 @@ import {
 import { appJwt, installationToken } from "../lib/jwt.mjs";
 import { runGhAsBot } from "../lib/gh-bot.mjs";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = join(__dirname, "..");
+const PAGES_BASE = "https://kattebak.github.io/as-me";
 
 const HELP = `as-me — scoped GitHub App wrapper
 
 usage:
-  as-me init [--org <name>] [--loopback]     create the GitHub App via manifest flow
-  as-me install [--org <name>] [--loopback]  install the App on user or org
-  as-me login                                OAuth user-to-server login
-  as-me env                                  print export GH_TOKEN=... for eval
-  as-me git-credential <op>                  git credential helper (get/store/erase)
-  as-me bot <gh-args...>                     run gh with an installation token (as the App)
-  as-me status                               show what is configured
-  as-me --help                               this help
+  as-me init [--org <name>]      create the GitHub App via manifest flow
+  as-me install [--org <name>]   install the App on user or org
+  as-me login                    OAuth user-to-server login
+  as-me env                      print export GH_TOKEN=... for eval
+  as-me git-credential <op>      git credential helper (get/store/erase)
+  as-me bot <gh-args...>         run gh with an installation token (as the App)
+  as-me status                   show what is configured
+  as-me --help                   this help
 
-  init/install default to manual paste: open the URL in any browser, click
-  through the flow, then paste the redirect URL (or the \`code\`/\`installation_id\`
-  value from it) back here. Pass --loopback to instead run a local listener on
-  127.0.0.1:8765 and auto-receive the callback (only works when the browser
-  and the CLI are on the same host and the port is reachable).
+  init prints a URL to ${PAGES_BASE}/init.html — open it in any browser,
+  review/edit the App name + owner, click 'Create GitHub App'. GitHub redirects
+  back to a 'paste this' page; copy the code into the still-waiting CLI prompt.
 
   init defaults the App name to \`\${USER}-only\` (e.g. mvhenten-only) so each
   install is single-tenant by convention. Pass --name <slug> to override, or
-  --description <text> for the App description shown in GitHub's UI.
+  --description <text> for the description shown in GitHub's UI.
 `;
-
-function htmlEscape(s) {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-function writeManifestForm(action, manifest) {
-  const json = JSON.stringify(manifest);
-  const html = `<!doctype html>
-<html><head><meta charset="utf-8"><title>as-me — create GitHub App</title>
-<style>body{font-family:system-ui,sans-serif;padding:2rem;max-width:40rem}
-button{font-size:1rem;padding:.5rem 1rem}</style></head>
-<body>
-  <h1>Creating GitHub App…</h1>
-  <p>Submitting manifest to GitHub. If nothing happens automatically, click the button below.</p>
-  <form id="f" action="${htmlEscape(action)}" method="post">
-    <input type="hidden" name="manifest" value="${htmlEscape(json)}">
-    <button type="submit">Create GitHub App from manifest</button>
-  </form>
-  <script>document.getElementById('f').submit();</script>
-</body></html>
-`;
-  const dir = mkdtempSync(join(tmpdir(), "as-me-init-"));
-  const path = join(dir, "manifest.html");
-  writeFileSync(path, html);
-  return path;
-}
-
-function openBrowser(url) {
-  const cmd =
-    process.platform === "darwin"
-      ? "open"
-      : process.platform === "win32"
-        ? "start"
-        : "xdg-open";
-  try {
-    spawn(cmd, [url], { stdio: "ignore", detached: true }).unref();
-  } catch {}
-  console.error(`open: ${url}`);
-}
 
 function parseFlags(args) {
   const flags = {};
@@ -102,8 +50,6 @@ function parseFlags(args) {
       flags.org = args[++i];
     } else if (a === "--bot") {
       flags.bot = true;
-    } else if (a === "--loopback") {
-      flags.loopback = true;
     } else if (a === "--name") {
       flags.name = args[++i];
     } else if (a === "--description") {
@@ -118,49 +64,25 @@ function parseFlags(args) {
 }
 
 async function cmdInit(flags) {
-  const manifest = JSON.parse(
-    readFileSync(join(REPO_ROOT, "manifest.json"), "utf8"),
-  );
-  if (flags.name) {
-    manifest.name = flags.name;
-  } else if (process.env.USER) {
-    manifest.name = `${process.env.USER}-only`;
-  }
-  if (flags.description) manifest.description = flags.description;
   const state = loadState();
-  const action = flags.org
-    ? `https://github.com/organizations/${flags.org}/settings/apps/new`
-    : `https://github.com/settings/apps/new`;
-  // GitHub's manifest flow requires POST: the manifest goes in the form body,
-  // not the query string. A GET URL with ?manifest=… is silently ignored and
-  // GitHub falls back to the blank manual-create form. So we write a tiny
-  // self-submitting HTML form to /tmp and tell the user to open the file.
-  const formPath = writeManifestForm(action, manifest);
-  const fileUrl = `file://${formPath}`;
-  let params;
-  if (flags.loopback) {
-    console.error("opening browser to create GitHub App from manifest…");
-    openBrowser(fileUrl);
-    ({ params } = await runCallbackServer({
-      path: "/manifest-callback",
-      port: 8765,
-    }));
-  } else {
-    console.error("open this HTML file in any browser:\n");
-    console.error(fileUrl);
-    console.error(
-      "\nit auto-submits the manifest to GitHub via POST. on the GitHub page,\n" +
-        "scroll to the bottom and click 'Create GitHub App' — all fields are\n" +
-        "pre-filled. permissions granted: contents/PRs/issues/statuses write,\n" +
-        "metadata read — nothing else. that's the whole juicebox.\n" +
-        "\nbrowser on a different machine? copy the file over first:\n" +
-        `  scp <user>@<this-host>:${formPath} ~/as-me-manifest.html\n`,
-    );
-    ({ params } = await promptCallbackUrl({
-      path: "/manifest-callback",
-      expectParam: "code",
-    }));
-  }
+  const url = new URL(`${PAGES_BASE}/init.html`);
+  const defaultName = flags.name || (process.env.USER ? `${process.env.USER}-only` : null);
+  if (defaultName) url.searchParams.set("name", defaultName);
+  if (flags.description) url.searchParams.set("desc", flags.description);
+  if (flags.org) url.searchParams.set("org", flags.org);
+
+  console.error("open this URL in any browser to create your scoped GitHub App:\n");
+  console.error(url.toString());
+  console.error(
+    "\nthe page is the setup wizard — review the App name/owner, see exactly which\n" +
+      "permissions are being granted (locked by manifest), click 'Create GitHub App'.\n" +
+      "GitHub will redirect you to a small paste-helper page; copy the code from\n" +
+      "there into the prompt below.\n",
+  );
+  const { params } = await promptCallbackUrl({
+    path: "/as-me/callback.html",
+    expectParam: "code",
+  });
   if (!params.code) throw new Error("no code in manifest callback");
   const res = await fetch(
     `https://api.github.com/app-manifests/${params.code}/conversions`,
@@ -197,27 +119,19 @@ async function cmdInstall(flags) {
   const state = loadState();
   if (!state.slug) throw new Error("no app configured; run `as-me init` first");
   const url = `https://github.com/apps/${state.slug}/installations/new`;
-  let params;
-  if (flags.loopback) {
-    console.error("opening browser to install app…");
-    openBrowser(url);
-    ({ params } = await runCallbackServer({
-      path: ["/callback", "/manifest-callback"],
-      port: 8765,
-    }));
-  } else {
-    console.error("open this URL in any browser:\n");
-    console.error(url);
-    console.error(
-      "\non the GitHub page: pick which repositories the App can access. fewer\n" +
-        "repos = smaller juicebox = smaller blast radius if anything goes wrong.\n" +
-        "you can change this later in the App settings. click Install when done.\n",
-    );
-    ({ params } = await promptCallbackUrl({
-      path: ["/callback", "/manifest-callback"],
-      expectParam: "installation_id",
-    }));
-  }
+  console.error("open this URL in any browser to install the App:\n");
+  console.error(url);
+  console.error(
+    "\non the GitHub page: pick which repositories the App can access. fewer\n" +
+      "repos = smaller juicebox = smaller blast radius if anything goes wrong.\n" +
+      "you can change this later in the App settings. click Install when done.\n" +
+      "GitHub will redirect to a paste-helper page; copy the installation id\n" +
+      "from there into the prompt below.\n",
+  );
+  const { params } = await promptCallbackUrl({
+    path: "/as-me/callback.html",
+    expectParam: "installation_id",
+  });
   const id = params.installation_id;
   if (!id) throw new Error(`no installation_id in callback: ${JSON.stringify(params)}`);
   const installationId = Number.parseInt(id, 10);

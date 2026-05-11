@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>as-me — create your scoped GitHub App</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root { --accent:#ff9933; --border:#d4d4d4; --muted:#6e6e6e; --bg:#fafafa; --ok:#2da44e; --err:#cf222e; }
+* { box-sizing: border-box; }
+body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; max-width: 40rem; margin: 2rem auto; padding: 0 1rem; color: #222; line-height: 1.5; }
+h1 { font-size: 1.4rem; margin: 0 0 .5rem; }
+h1 .juice { font-size: 1.7rem; }
+.subtitle { color: var(--muted); margin: 0 0 2rem; }
+label.field { display: block; margin: 1.25rem 0 .25rem; font-weight: 600; font-size: .9rem; }
+.help { color: var(--muted); font-size: .85rem; margin: .25rem 0 0; }
+input[type=text] { font: inherit; width: 100%; padding: .55rem .75rem; border: 1px solid var(--border); border-radius: 6px; }
+input[type=text]:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(255,153,51,.15); }
+.owner-radios { display: flex; gap: 1rem; margin: .5rem 0; }
+.owner-radios label { font-weight: 400; cursor: pointer; user-select: none; }
+.owner-radios input { margin-right: .35rem; }
+#orgrow { margin-top: .5rem; display: none; gap: .5rem; align-items: center; }
+#orgrow.show { display: flex; }
+#orgrow input { flex: 1; }
+.org-status { font-size: .85rem; min-width: 7rem; white-space: nowrap; }
+.org-status.ok { color: var(--ok); }
+.org-status.err { color: var(--err); }
+.org-status.loading { color: var(--muted); }
+.perms { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.25rem; margin: 1.5rem 0; }
+.perms h3 { margin: 0 0 .75rem; font-size: .95rem; }
+.perms ul { list-style: none; padding: 0; margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .85rem; }
+.perms li { padding: 3px 0; display: flex; gap: .5rem; }
+.perms .yes::before { content: "✓"; color: var(--ok); font-weight: bold; }
+.perms .no::before { content: "✗"; color: var(--muted); }
+.perms .lock { color: var(--muted); font-size: .8rem; margin-top: .75rem; font-style: italic; }
+button.create { font: inherit; font-weight: 600; font-size: 1rem; padding: .75rem 1.5rem; background: var(--accent); color: white; border: none; border-radius: 6px; cursor: pointer; margin-top: .5rem; }
+button.create:hover { filter: brightness(0.95); }
+button.create:disabled { background: #ccc; cursor: not-allowed; }
+.footer { color: var(--muted); font-size: .85rem; margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9em; background: #f4f4f4; padding: 1px 4px; border-radius: 3px; }
+</style>
+</head>
+<body>
+<h1><span class="juice">🧃</span> as-me — create your scoped GitHub App</h1>
+<p class="subtitle">This page generates a manifest with the locked permissions below and submits it to GitHub. You'll review the App on github.com and click <strong>Create GitHub App</strong>.</p>
+
+<form id="f">
+  <label class="field" for="name">App name</label>
+  <input type="text" id="name" required maxlength="34" autocomplete="off">
+  <p class="help">Must be globally unique on GitHub. <code>${USER}-only</code> is the suggested default.</p>
+
+  <label class="field" for="desc">Description</label>
+  <input type="text" id="desc" autocomplete="off">
+  <p class="help">Shown on the App's public GitHub page. Not security-critical.</p>
+
+  <label class="field">Owner</label>
+  <div class="owner-radios">
+    <label><input type="radio" name="owner" value="personal" checked> Personal account</label>
+    <label><input type="radio" name="owner" value="org"> Organization</label>
+  </div>
+  <div id="orgrow">
+    <input type="text" id="orgname" placeholder="org-slug" autocomplete="off">
+    <div class="org-status" id="orgstatus"></div>
+  </div>
+  <p class="help">Personal = the App lives under your account, only you install/manage it. Org = lives under the org; teammates with admin can install/manage too.</p>
+
+  <div class="perms">
+    <h3>Permissions granted</h3>
+    <ul>
+      <li class="yes">Contents — read &amp; write</li>
+      <li class="yes">Pull requests — read &amp; write</li>
+      <li class="yes">Issues — read &amp; write</li>
+      <li class="yes">Statuses — read &amp; write</li>
+      <li class="yes">Metadata — read</li>
+      <li class="no">Administration, Members, Actions, Packages, Secrets, Pages, Workflows — no access</li>
+    </ul>
+    <p class="lock">This is the whole juicebox. Locked by the manifest — you can't expand the permissions on this page, and a compromised agent can never do anything outside this list.</p>
+  </div>
+
+  <button type="submit" class="create">Create GitHub App →</button>
+</form>
+
+<p class="footer">After clicking, you'll land on github.com to confirm. Then you'll be redirected to a small "paste this back" page with the code you need for your terminal.</p>
+
+<script>
+(() => {
+  const q = new URLSearchParams(location.search);
+  const $ = (id) => document.getElementById(id);
+
+  $('name').value = q.get('name') || '';
+  $('desc').value = q.get('desc') || 'Scoped GitHub App wrapper for gh and git — manifest-bounded permissions instead of full OAuth.';
+
+  if (q.get('org')) {
+    document.querySelector('input[name=owner][value=org]').checked = true;
+    $('orgname').value = q.get('org');
+    $('orgrow').classList.add('show');
+    validateOrg($('orgname').value);
+  }
+
+  document.querySelectorAll('input[name=owner]').forEach((r) => {
+    r.addEventListener('change', () => {
+      const isOrg = document.querySelector('input[name=owner]:checked').value === 'org';
+      $('orgrow').classList.toggle('show', isOrg);
+      if (!isOrg) $('orgstatus').textContent = '';
+    });
+  });
+
+  let validateTimer;
+  $('orgname').addEventListener('input', (e) => {
+    clearTimeout(validateTimer);
+    const v = e.target.value.trim();
+    if (!v) { $('orgstatus').textContent = ''; return; }
+    $('orgstatus').textContent = 'checking…';
+    $('orgstatus').className = 'org-status loading';
+    validateTimer = setTimeout(() => validateOrg(v), 400);
+  });
+
+  async function validateOrg(slug) {
+    try {
+      const res = await fetch(`https://api.github.com/orgs/${encodeURIComponent(slug)}`);
+      if (res.status === 200) {
+        const o = await res.json();
+        $('orgstatus').textContent = `✓ ${o.login}`;
+        $('orgstatus').className = 'org-status ok';
+      } else if (res.status === 404) {
+        $('orgstatus').textContent = '✗ no public org';
+        $('orgstatus').className = 'org-status err';
+      } else {
+        $('orgstatus').textContent = `(github ${res.status})`;
+        $('orgstatus').className = 'org-status loading';
+      }
+    } catch (e) {
+      $('orgstatus').textContent = '(offline)';
+      $('orgstatus').className = 'org-status loading';
+    }
+  }
+
+  $('f').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const ownerKind = document.querySelector('input[name=owner]:checked').value;
+    const orgName = $('orgname').value.trim();
+    if (ownerKind === 'org' && !orgName) {
+      alert('Enter an org slug or switch to Personal account.');
+      return;
+    }
+    const action = ownerKind === 'org'
+      ? `https://github.com/organizations/${encodeURIComponent(orgName)}/settings/apps/new`
+      : 'https://github.com/settings/apps/new';
+
+    const callbackUrl = 'https://kattebak.github.io/as-me/callback.html';
+    const manifest = {
+      name: $('name').value.trim(),
+      description: $('desc').value.trim() || 'Scoped GitHub App wrapper for gh and git',
+      url: 'https://github.com/kattebak/as-me',
+      public: false,
+      request_oauth_on_install: true,
+      redirect_url: callbackUrl,
+      callback_urls: [callbackUrl],
+      default_events: [],
+      default_permissions: {
+        contents: 'write',
+        pull_requests: 'write',
+        issues: 'write',
+        metadata: 'read',
+        statuses: 'write'
+      }
+    };
+
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = action;
+    const inp = document.createElement('input');
+    inp.type = 'hidden';
+    inp.name = 'manifest';
+    inp.value = JSON.stringify(manifest);
+    form.appendChild(inp);
+    document.body.appendChild(form);
+    form.submit();
+  });
+})();
+</script>
+</body>
+</html>

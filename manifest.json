@@ -4,8 +4,8 @@
   "url": "https://github.com/kattebak/as-me",
   "public": false,
   "request_oauth_on_install": true,
-  "redirect_url": "http://127.0.0.1:8765/manifest-callback",
-  "callback_urls": ["http://127.0.0.1:8765/callback"],
+  "redirect_url": "https://kattebak.github.io/as-me/callback.html",
+  "callback_urls": ["https://kattebak.github.io/as-me/callback.html"],
   "default_events": [],
   "default_permissions": {
     "contents": "write",
