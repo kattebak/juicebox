@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { spawn, execSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -47,6 +48,37 @@ usage:
   install is single-tenant by convention. Pass --name <slug> to override, or
   --description <text> for the App description shown in GitHub's UI.
 `;
+
+function htmlEscape(s) {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function writeManifestForm(action, manifest) {
+  const json = JSON.stringify(manifest);
+  const html = `<!doctype html>
+<html><head><meta charset="utf-8"><title>as-me — create GitHub App</title>
+<style>body{font-family:system-ui,sans-serif;padding:2rem;max-width:40rem}
+button{font-size:1rem;padding:.5rem 1rem}</style></head>
+<body>
+  <h1>Creating GitHub App…</h1>
+  <p>Submitting manifest to GitHub. If nothing happens automatically, click the button below.</p>
+  <form id="f" action="${htmlEscape(action)}" method="post">
+    <input type="hidden" name="manifest" value="${htmlEscape(json)}">
+    <button type="submit">Create GitHub App from manifest</button>
+  </form>
+  <script>document.getElementById('f').submit();</script>
+</body></html>
+`;
+  const dir = mkdtempSync(join(tmpdir(), "as-me-init-"));
+  const path = join(dir, "manifest.html");
+  writeFileSync(path, html);
+  return path;
+}
 
 function openBrowser(url) {
   const cmd =
@@ -96,26 +128,33 @@ async function cmdInit(flags) {
   }
   if (flags.description) manifest.description = flags.description;
   const state = loadState();
-  const base = flags.org
+  const action = flags.org
     ? `https://github.com/organizations/${flags.org}/settings/apps/new`
     : `https://github.com/settings/apps/new`;
-  const url = `${base}?manifest=${encodeURIComponent(JSON.stringify(manifest))}`;
+  // GitHub's manifest flow requires POST: the manifest goes in the form body,
+  // not the query string. A GET URL with ?manifest=… is silently ignored and
+  // GitHub falls back to the blank manual-create form. So we write a tiny
+  // self-submitting HTML form to /tmp and tell the user to open the file.
+  const formPath = writeManifestForm(action, manifest);
+  const fileUrl = `file://${formPath}`;
   let params;
   if (flags.loopback) {
     console.error("opening browser to create GitHub App from manifest…");
-    openBrowser(url);
+    openBrowser(fileUrl);
     ({ params } = await runCallbackServer({
       path: "/manifest-callback",
       port: 8765,
     }));
   } else {
-    console.error("open this URL in any browser:\n");
-    console.error(url);
+    console.error("open this HTML file in any browser:\n");
+    console.error(fileUrl);
     console.error(
-      "\non the GitHub page: the manifest pre-fills everything (name, description,\n" +
-        "permissions). scroll to the bottom and click 'Create GitHub App'. don't\n" +
-        "edit any fields. permissions granted: contents/PRs/issues/statuses write,\n" +
-        "metadata read — nothing else. that's the whole juicebox.\n",
+      "\nit auto-submits the manifest to GitHub via POST. on the GitHub page,\n" +
+        "scroll to the bottom and click 'Create GitHub App' — all fields are\n" +
+        "pre-filled. permissions granted: contents/PRs/issues/statuses write,\n" +
+        "metadata read — nothing else. that's the whole juicebox.\n" +
+        "\nbrowser on a different machine? copy the file over first:\n" +
+        `  scp <user>@<this-host>:${formPath} ~/as-me-manifest.html\n`,
     );
     ({ params } = await promptCallbackUrl({
       path: "/manifest-callback",

@@ -29,28 +29,30 @@ as-me install [--org <name>]              # installs it on a user or org account
 as-me login                               # user-to-server OAuth (device flow)
 ```
 
-`init` and `install` print a URL and wait. Open it in any browser — your laptop, your phone, an SSH-forwarded session, anywhere — click through, then paste the resulting redirect URL (or just the `code=…` / `installation_id=…` value) back into the CLI. The flow doesn't need an open port, a local browser, or a graphical environment on the machine running `as-me`.
+`init` writes a tiny HTML form to `/tmp` and prints its `file://` path. Open it in any browser — your laptop, your phone, an SSH-forwarded session, anywhere — and the form auto-POSTs the manifest to GitHub. After you click "Create GitHub App", the browser will redirect to a `127.0.0.1:8765` URL that fails to load — paste that failed URL (or just the `code=…` value) back at the CLI prompt. `install` works the same way but uses a regular GitHub URL (no form needed). Neither needs an open port, a local browser, or a graphical environment on the machine running `as-me`. If your browser is on a different machine, `scp` the HTML over first — the CLI prints the exact command.
 
 ```text
 $ as-me init
-open this URL in any browser:
+open this HTML file in any browser:
 
-https://github.com/settings/apps/new?manifest=…
+file:///tmp/as-me-init-XXXX/manifest.html
 
-on the GitHub page: the manifest pre-fills everything (name, description,
-permissions). scroll to the bottom and click 'Create GitHub App'. ...
+it auto-submits the manifest to GitHub via POST. on the GitHub page,
+scroll to the bottom and click 'Create GitHub App' …
 
 paste: http://127.0.0.1:8765/manifest-callback?code=abc123
 
-app created: https://github.com/settings/apps/as-me
+app created: https://github.com/settings/apps/mvhenten-only
 
 REQUIRED before `as-me login`:
-  1. open https://github.com/settings/apps/as-me
+  1. open https://github.com/settings/apps/mvhenten-only
   2. scroll to 'Identifying and authorizing users'
   3. toggle 'Enable Device Flow' ON, click Save
 
 next: as-me install
 ```
+
+(GitHub's manifest flow requires POST: a GET URL with `?manifest=…` is silently ignored and you'd see the blank manual-create form. That's why `init` writes an auto-submitting form instead of just printing a URL.)
 
 Omit `--org` to create/install under your own account; pass `--org <name>` to target an org you administer. `init` defaults the App name to `${USER}-only` (e.g. `mvhenten-only`) so each install is single-tenant by convention; pass `--name <slug>` to override, or `--description <text>` for the description shown in GitHub's UI.
 
