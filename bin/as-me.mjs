@@ -13,6 +13,7 @@ import {
 } from "../lib/state.mjs";
 import {
   runCallbackServer,
+  promptCallbackUrl,
   refreshIfNeeded,
   startDeviceFlow,
   pollDeviceFlow,
@@ -26,14 +27,20 @@ const REPO_ROOT = join(__dirname, "..");
 const HELP = `as-me — scoped GitHub App wrapper
 
 usage:
-  as-me init [--org <name>]        create the GitHub App via manifest flow
-  as-me install [--org <name>]     install the App on user or org
-  as-me login                      OAuth user-to-server login
-  as-me env                        print export GH_TOKEN=... for eval
-  as-me git-credential <op>        git credential helper (get/store/erase)
-  as-me bot <gh-args...>           run gh with an installation token (as the App)
-  as-me status                     show what is configured
-  as-me --help                     this help
+  as-me init [--org <name>] [--loopback]     create the GitHub App via manifest flow
+  as-me install [--org <name>] [--loopback]  install the App on user or org
+  as-me login                                OAuth user-to-server login
+  as-me env                                  print export GH_TOKEN=... for eval
+  as-me git-credential <op>                  git credential helper (get/store/erase)
+  as-me bot <gh-args...>                     run gh with an installation token (as the App)
+  as-me status                               show what is configured
+  as-me --help                               this help
+
+  init/install default to manual paste: open the URL in any browser, click
+  through the flow, then paste the redirect URL (or the \`code\`/\`installation_id\`
+  value from it) back here. Pass --loopback to instead run a local listener on
+  127.0.0.1:8765 and auto-receive the callback (only works when the browser
+  and the CLI are on the same host and the port is reachable).
 `;
 
 function openBrowser(url) {
@@ -58,6 +65,8 @@ function parseFlags(args) {
       flags.org = args[++i];
     } else if (a === "--bot") {
       flags.bot = true;
+    } else if (a === "--loopback") {
+      flags.loopback = true;
     } else if (a === "--help" || a === "-h") {
       flags.help = true;
     } else {
@@ -76,12 +85,22 @@ async function cmdInit(flags) {
     ? `https://github.com/organizations/${flags.org}/settings/apps/new`
     : `https://github.com/settings/apps/new`;
   const url = `${base}?manifest=${encodeURIComponent(JSON.stringify(manifest))}`;
-  console.error("opening browser to create GitHub App from manifest…");
-  openBrowser(url);
-  const { params } = await runCallbackServer({
-    path: "/manifest-callback",
-    port: 8765,
-  });
+  let params;
+  if (flags.loopback) {
+    console.error("opening browser to create GitHub App from manifest…");
+    openBrowser(url);
+    ({ params } = await runCallbackServer({
+      path: "/manifest-callback",
+      port: 8765,
+    }));
+  } else {
+    console.error("open this URL in any browser to create the GitHub App:");
+    console.error(`\n  ${url}\n`);
+    ({ params } = await promptCallbackUrl({
+      path: "/manifest-callback",
+      expectParam: "code",
+    }));
+  }
   if (!params.code) throw new Error("no code in manifest callback");
   const res = await fetch(
     `https://api.github.com/app-manifests/${params.code}/conversions`,
@@ -113,12 +132,22 @@ async function cmdInstall(flags) {
   const state = loadState();
   if (!state.slug) throw new Error("no app configured; run `as-me init` first");
   const url = `https://github.com/apps/${state.slug}/installations/new`;
-  console.error("opening browser to install app…");
-  openBrowser(url);
-  const { params } = await runCallbackServer({
-    path: ["/callback", "/manifest-callback"],
-    port: 8765,
-  });
+  let params;
+  if (flags.loopback) {
+    console.error("opening browser to install app…");
+    openBrowser(url);
+    ({ params } = await runCallbackServer({
+      path: ["/callback", "/manifest-callback"],
+      port: 8765,
+    }));
+  } else {
+    console.error("open this URL in any browser to install the App:");
+    console.error(`\n  ${url}\n`);
+    ({ params } = await promptCallbackUrl({
+      path: ["/callback", "/manifest-callback"],
+      expectParam: "installation_id",
+    }));
+  }
   const id = params.installation_id;
   if (!id) throw new Error(`no installation_id in callback: ${JSON.stringify(params)}`);
   const owner = flags.org || "mvhenten";

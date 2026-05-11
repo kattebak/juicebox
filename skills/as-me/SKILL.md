@@ -33,15 +33,11 @@ Ask which org to create the App under. Default to personal (omit `--org`). Run:
 as-me init [--org <org>]
 ```
 
-**Critical — surface this to the user before they leave the browser callback:** open `https://github.com/settings/apps/as-me` → "Identifying and authorizing users" → toggle **Enable Device Flow** on. The manifest cannot set this flag; without it `as-me login` aborts with `device_flow_disabled`.
+The CLI prints a `https://github.com/.../settings/apps/new?manifest=…` URL and waits. Tell the user: open it in any browser (laptop, phone, whatever), click **Create GitHub App**. The browser will redirect to a `127.0.0.1:8765` URL that fails to load — that's expected. Copy the full URL from the address bar (or just the `code=…` value) and paste it into the CLI prompt. The CLI exchanges the code with GitHub and saves the App credentials.
 
-**Headless / remote caveat:** if no browser is available on this machine, §3 and §4 can't complete here. Have the user run them on their laptop, then:
+**Critical — do this immediately after the App is created, before §5:** open `https://github.com/settings/apps/as-me` → "Identifying and authorizing users" → toggle **Enable Device Flow** on. The manifest cannot set this flag; without it `as-me login` aborts with `device_flow_disabled`.
 
-```sh
-rsync -a ~/.config/as-me/ remote:.config/as-me/
-```
-
-and resume from §5 on the remote.
+**Same-host shortcut:** if the user is on a graphical machine where `127.0.0.1:8765` is reachable from their browser, `as-me init --loopback` runs a local listener and auto-captures the callback (no paste). Skip the flag if unsure — the default works in every environment.
 
 ## 4. `as-me install`
 
@@ -49,7 +45,7 @@ and resume from §5 on the remote.
 as-me install [--org <org>]
 ```
 
-Browser opens; the user picks which repos the App can access; the callback captures `installation_id`.
+Same shape as §3: CLI prints a `https://github.com/apps/<slug>/installations/new` URL, user opens it in a browser, picks which repos the App can access, then pastes the redirect URL (containing `installation_id=…`) back. `--loopback` works here too.
 
 ## 5. `as-me login`
 
