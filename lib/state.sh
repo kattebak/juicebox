@@ -1,14 +1,14 @@
 #!/bin/sh
-# state.sh — state.json + private-key.pem I/O for as-me.
+# state.sh — state.json + private-key.pem I/O for juicebox.
 #
-# State dir defaults to ~/.config/as-me but can be overridden with
-# AS_ME_STATE_DIR for tests / sandboxed installs.
+# State dir defaults to ~/.config/juicebox but can be overridden with
+# JUICEBOX_STATE_DIR for tests / sandboxed installs.
 
 as_me_state_dir() {
-    if [ -n "${AS_ME_STATE_DIR:-}" ]; then
-        printf '%s\n' "$AS_ME_STATE_DIR"
+    if [ -n "${JUICEBOX_STATE_DIR:-}" ]; then
+        printf '%s\n' "$JUICEBOX_STATE_DIR"
     else
-        printf '%s/.config/as-me\n' "$HOME"
+        printf '%s/.config/juicebox\n' "$HOME"
     fi
 }
 

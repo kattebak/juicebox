@@ -58,7 +58,7 @@ installation_token() {
             -H "Authorization: Bearer $jwt" \
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
-            -H "User-Agent: as-me" \
+            -H "User-Agent: juicebox" \
             "$url"
     )
     body=$(cat "$tmp")

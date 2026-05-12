@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>as-me — paste this back</title>
+<title>juicebox — paste this back</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
 :root { --accent:#ff9933; --border:#d4d4d4; --muted:#6e6e6e; --bg:#fafafa; --ok:#2da44e; --err:#cf222e; }
@@ -28,7 +28,7 @@ a { color: #0969da; }
 </style>
 </head>
 <body>
-<h1 id="title"><span class="juice">🧃</span> as-me</h1>
+<h1 id="title"><span class="juice">🧃</span> juicebox</h1>
 <p class="subtitle" id="subtitle">Paste this back at your terminal.</p>
 
 <div class="value-box" id="value"></div>
@@ -50,12 +50,12 @@ a { color: #0969da; }
   const error = q.get('error');
 
   if (error) {
-    $('title').innerHTML = '<span class="juice">🧃</span> as-me — error from GitHub';
+    $('title').innerHTML = '<span class="juice">🧃</span> juicebox — error from GitHub';
     $('subtitle').textContent = q.get('error_description') || error;
     $('value').className = 'value-box empty';
     $('value').textContent = '(no code returned)';
     $('copy').disabled = true;
-    $('next').innerHTML = '<h3>What to do</h3><p>Cancel the current <code class="inline">as-me</code> command (Ctrl-C) and retry. If the error mentions a name conflict, pass <code class="inline">--name &lt;different-slug&gt;</code>.</p>';
+    $('next').innerHTML = '<h3>What to do</h3><p>Cancel the current <code class="inline">juicebox</code> command (Ctrl-C) and retry. If the error mentions a name conflict, pass <code class="inline">--name &lt;different-slug&gt;</code>.</p>';
     return;
   }
 
@@ -63,12 +63,12 @@ a { color: #0969da; }
   const value = isInstall ? installationId : code;
 
   if (!value) {
-    $('title').innerHTML = '<span class="juice">🧃</span> as-me';
+    $('title').innerHTML = '<span class="juice">🧃</span> juicebox';
     $('subtitle').textContent = 'No code in the URL — were you redirected here from GitHub?';
     $('value').className = 'value-box empty';
     $('value').textContent = '(empty — expected ?code=… or ?installation_id=…)';
     $('copy').disabled = true;
-    $('next').innerHTML = '<h3>This page is the callback target for the as-me setup flow.</h3><p>If you arrived here directly, that\'s fine — it just means there\'s nothing to paste. Run <code class="inline">as-me init</code> from your terminal to start.</p>';
+    $('next').innerHTML = '<h3>This page is the callback target for the juicebox setup flow.</h3><p>If you arrived here directly, that\'s fine — it just means there\'s nothing to paste. Run <code class="inline">juicebox init</code> from your terminal to start.</p>';
     return;
   }
 
@@ -76,25 +76,25 @@ a { color: #0969da; }
   $('value').className = 'value-box';
 
   if (isInstall) {
-    document.title = 'as-me — installation_id';
-    $('title').innerHTML = '<span class="juice">🧃</span> as-me — App installed';
+    document.title = 'juicebox — installation_id';
+    $('title').innerHTML = '<span class="juice">🧃</span> juicebox — App installed';
     $('subtitle').textContent = setupAction === 'update'
       ? 'Installation updated. Paste the id below back at your terminal.'
       : 'App installed on your account/org. Paste the installation id back at your terminal.';
     $('next').innerHTML = `<h3>Back in your terminal</h3>
       <ol>
-        <li>Paste the value above at the <code>paste:</code> prompt of <code class="inline">as-me install</code>.</li>
-        <li>Then run <code class="inline">as-me login</code> to mint your user token.</li>
+        <li>Paste the value above at the <code>paste:</code> prompt of <code class="inline">juicebox install</code>.</li>
+        <li>Then run <code class="inline">juicebox login</code> to mint your user token.</li>
       </ol>`;
   } else {
-    document.title = 'as-me — manifest code';
-    $('title').innerHTML = '<span class="juice">🧃</span> as-me — App created!';
+    document.title = 'juicebox — manifest code';
+    $('title').innerHTML = '<span class="juice">🧃</span> juicebox — App created!';
     $('subtitle').textContent = 'Paste the temporary code below into your terminal — it\'s good for ~10 minutes.';
     $('next').innerHTML = `<h3>Back in your terminal</h3>
       <ol>
-        <li>Paste the value above at the <code>paste:</code> prompt of <code class="inline">as-me init</code>.</li>
+        <li>Paste the value above at the <code>paste:</code> prompt of <code class="inline">juicebox init</code>.</li>
         <li>Open the App's settings page (URL printed by the CLI), find <strong>Identifying and authorizing users</strong>, toggle <strong>Enable Device Flow</strong> on.</li>
-        <li>Run <code class="inline">as-me install</code>, then <code class="inline">as-me login</code>.</li>
+        <li>Run <code class="inline">juicebox install</code>, then <code class="inline">juicebox login</code>.</li>
       </ol>`;
   }
 

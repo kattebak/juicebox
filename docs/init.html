@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>as-me — create your scoped GitHub App</title>
+<title>juicebox — create your scoped GitHub App</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
 :root { --accent:#ff9933; --border:#d4d4d4; --muted:#6e6e6e; --bg:#fafafa; --ok:#2da44e; --err:#cf222e; }
@@ -40,7 +40,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .
 </style>
 </head>
 <body>
-<h1><span class="juice">🧃</span> as-me — create your scoped GitHub App</h1>
+<h1><span class="juice">🧃</span> juicebox — create your scoped GitHub App</h1>
 <p class="subtitle">This page generates a manifest with the locked permissions below and submits it to GitHub. You'll review the App on github.com and click <strong>Create GitHub App</strong>.</p>
 
 <form id="f">
@@ -157,12 +157,12 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .
       ? `https://github.com/organizations/${encodeURIComponent(orgName)}/settings/apps/new`
       : 'https://github.com/settings/apps/new';
 
-    const callbackUrl = 'https://kattebak.github.io/as-me/callback.html';
+    const callbackUrl = 'https://kattebak.github.io/juicebox/callback.html';
     const isPublic = document.querySelector('input[name=visibility]:checked').value === 'public';
     const manifest = {
       name: $('name').value.trim(),
       description: $('desc').value.trim() || 'Scoped GitHub App wrapper for gh and git',
-      url: 'https://github.com/kattebak/as-me',
+      url: 'https://github.com/kattebak/juicebox',
       public: isPublic,
       request_oauth_on_install: true,
       redirect_url: callbackUrl,

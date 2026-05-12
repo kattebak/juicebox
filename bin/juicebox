@@ -1,7 +1,7 @@
 #!/bin/sh
 # shellcheck disable=SC2016
 # (Single-quoted strings with backticks are user-facing command-name hints.)
-# as-me — scoped GitHub App wrapper.
+# juicebox — scoped GitHub App wrapper.
 #
 # Dispatch entry point. Sources lib/{state,jwt,oauth,gh-bot}.sh and runs the
 # requested subcommand.
@@ -9,7 +9,7 @@
 set -u
 
 # Resolve script dir, following symlinks one level (install.sh symlinks
-# ~/.local/bin/as-me → $AS_ME_HOME/bin/as-me; we need lib/ relative to the
+# ~/.local/bin/juicebox → $JUICEBOX_HOME/bin/juicebox; we need lib/ relative to the
 # real file).
 script_path=$0
 case "$script_path" in
@@ -37,21 +37,21 @@ LIB_DIR="${SCRIPT_DIR%/bin}/lib"
 # shellcheck source=../lib/gh-bot.sh
 . "$LIB_DIR/gh-bot.sh"
 
-PAGES_BASE="https://kattebak.github.io/as-me"
+PAGES_BASE="https://kattebak.github.io/juicebox"
 
 print_help() {
     cat <<EOF
-as-me — scoped GitHub App wrapper
+juicebox — scoped GitHub App wrapper
 
 usage:
-  as-me init [--org <name>]      create the GitHub App via manifest flow
-  as-me install [--org <name>]   install the App on user or org
-  as-me login                    OAuth user-to-server login
-  as-me env                      print export GH_TOKEN=... for eval
-  as-me git-credential <op>      git credential helper (get/store/erase)
-  as-me bot <gh-args...>         run gh with an installation token (as the App)
-  as-me status                   show what is configured
-  as-me --help                   this help
+  juicebox init [--org <name>]      create the GitHub App via manifest flow
+  juicebox install [--org <name>]   install the App on user or org
+  juicebox login                    OAuth user-to-server login
+  juicebox env                      print export GH_TOKEN=... for eval
+  juicebox git-credential <op>      git credential helper (get/store/erase)
+  juicebox bot <gh-args...>         run gh with an installation token (as the App)
+  juicebox status                   show what is configured
+  juicebox --help                   this help
 
   init prints a URL to ${PAGES_BASE}/init.html — open it in any browser,
   review/edit the App name + owner, click 'Create GitHub App'. GitHub redirects
@@ -149,7 +149,7 @@ cmd_init() {
             -X POST \
             -H 'Accept: application/vnd.github+json' \
             -H 'X-GitHub-Api-Version: 2022-11-28' \
-            -H 'User-Agent: as-me' \
+            -H 'User-Agent: juicebox' \
             "https://api.github.com/app-manifests/${code}/conversions"
     )
     body=$(cat "$tmp")
@@ -181,7 +181,7 @@ cmd_init() {
 
     {
         printf '\napp created: %s\n\n' "$html_url"
-        printf 'REQUIRED before `as-me login`:\n'
+        printf 'REQUIRED before `juicebox login`:\n'
         printf '  1. open %s\n' "$html_url"
         printf "  2. scroll to 'Identifying and authorizing users'\n"
         printf "  3. toggle 'Enable Device Flow' ON, click Save\n"
@@ -198,9 +198,9 @@ cmd_init() {
         } >&2
     fi
     if [ -n "$f_org" ]; then
-        printf 'next: as-me install --org %s\n' "$f_org" >&2
+        printf 'next: juicebox install --org %s\n' "$f_org" >&2
     else
-        printf 'next: as-me install\n' >&2
+        printf 'next: juicebox install\n' >&2
     fi
 }
 
@@ -209,7 +209,7 @@ resolve_installation_owner() {
     installation_id=$2
     app_id=$(printf '%s' "$state_json" | jq -r '.app_id // empty')
     if [ -z "$app_id" ]; then
-        printf 'no app configured; run `as-me init` first\n' >&2
+        printf 'no app configured; run `juicebox init` first\n' >&2
         return 1
     fi
     pp=$(pem_path)
@@ -220,7 +220,7 @@ resolve_installation_owner() {
             -H "Authorization: Bearer $jwt" \
             -H 'Accept: application/vnd.github+json' \
             -H 'X-GitHub-Api-Version: 2022-11-28' \
-            -H 'User-Agent: as-me' \
+            -H 'User-Agent: juicebox' \
             "https://api.github.com/app/installations/${installation_id}"
     )
     body=$(cat "$tmp")
@@ -253,7 +253,7 @@ cmd_install() {
     state=$(load_state)
     slug=$(printf '%s' "$state" | jq -r '.slug // empty')
     if [ -z "$slug" ]; then
-        die "no app configured; run \`as-me init\` first"
+        die "no app configured; run \`juicebox init\` first"
     fi
     install_url="https://github.com/apps/${slug}/installations/new"
     {
@@ -304,13 +304,13 @@ cmd_login() {
     client_id=$(printf '%s' "$state" | jq -r '.client_id // empty')
     slug=$(printf '%s' "$state" | jq -r '.slug // empty')
     if [ -z "$client_id" ]; then
-        die "no app configured; run \`as-me init\` first"
+        die "no app configured; run \`juicebox init\` first"
     fi
 
     device_resp=$(start_device_flow "$client_id")
     rc=$?
     if [ "$rc" -eq 7 ]; then
-        die "Enable 'Device Flow' in your App's settings at https://github.com/settings/apps/${slug} and re-run \`as-me login\`."
+        die "Enable 'Device Flow' in your App's settings at https://github.com/settings/apps/${slug} and re-run \`juicebox login\`."
     elif [ "$rc" -ne 0 ]; then
         exit 1
     fi
@@ -324,7 +324,7 @@ cmd_login() {
     mins=$((expires_in / 60))
 
     {
-        printf 'open this URL to authorize as-me (code %s, expires in %sm):\n\n' "$user_code" "$mins"
+        printf 'open this URL to authorize juicebox (code %s, expires in %sm):\n\n' "$user_code" "$mins"
         printf '  %s\n\n' "$full_url"
         printf "the code is pre-filled via the URL — just click 'Continue', then 'Authorize'.\n"
         printf 'waiting...\n'
@@ -334,9 +334,9 @@ cmd_login() {
     rc=$?
     case "$rc" in
         0) ;;
-        2) die "device code expired; re-run \`as-me login\`" ;;
+        2) die "device code expired; re-run \`juicebox login\`" ;;
         3) die "authorization denied" ;;
-        7) die "Enable 'Device Flow' in your App's settings at https://github.com/settings/apps/${slug} and re-run \`as-me login\`." ;;
+        7) die "Enable 'Device Flow' in your App's settings at https://github.com/settings/apps/${slug} and re-run \`juicebox login\`." ;;
         *) exit 1 ;;
     esac
 
@@ -395,12 +395,12 @@ cmd_bot() {
     state=$(load_state)
     app_id=$(printf '%s' "$state" | jq -r '.app_id // empty')
     if [ -z "$app_id" ]; then
-        die "no app; run \`as-me init\`"
+        die "no app; run \`juicebox init\`"
     fi
     owner=$(git_remote_owner) || die "bot mode needs a git repo with origin remote"
     installation_id=$(printf '%s' "$state" | jq -r --arg o "$owner" '.installations[$o] // empty')
     if [ -z "$installation_id" ]; then
-        die "no installation for ${owner}; run \`as-me install --org ${owner}\`"
+        die "no installation for ${owner}; run \`juicebox install --org ${owner}\`"
     fi
     pp=$(pem_path)
     token_resp=$(installation_token "$app_id" "$pp" "$installation_id") || exit 1

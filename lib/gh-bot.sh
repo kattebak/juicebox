@@ -105,7 +105,7 @@ run_gh_as_bot() {
             # Path missing or unreadable — pass through.
             GH_TOKEN="$token" GITHUB_TOKEN="$token" exec gh "$@"
         fi
-        tmpdir=$(mktemp -d "${TMPDIR:-/tmp}/as-me-body-XXXXXX")
+        tmpdir=$(mktemp -d "${TMPDIR:-/tmp}/juicebox-body-XXXXXX")
         tmp_file="${tmpdir}/body.md"
         {
             printf '%s\n\n' "$prefix"

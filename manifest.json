@@ -1,11 +1,11 @@
 {
-  "name": "as-me",
+  "name": "juicebox",
   "description": "Scoped GitHub App wrapper for gh and git — manifest-bounded permissions instead of full OAuth.",
-  "url": "https://github.com/kattebak/as-me",
+  "url": "https://github.com/kattebak/juicebox",
   "public": false,
   "request_oauth_on_install": true,
-  "redirect_url": "https://kattebak.github.io/as-me/callback.html",
-  "callback_urls": ["https://kattebak.github.io/as-me/callback.html"],
+  "redirect_url": "https://kattebak.github.io/juicebox/callback.html",
+  "callback_urls": ["https://kattebak.github.io/juicebox/callback.html"],
   "default_events": [],
   "default_permissions": {
     "contents": "write",
