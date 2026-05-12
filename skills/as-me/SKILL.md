@@ -98,6 +98,8 @@ as-me bot pr create --title "fix flake in api tests" --body "small retry tweak"
 #   small retry tweak
 ```
 
+**Gotcha — Copilot review rulesets:** if the target repo has a ruleset with *Automatically request Copilot code review* enabled (and a required status check pinned to that flow, e.g. `copilot-review-gate`), do **not** open the PR via `as-me bot`. GitHub's ruleset only fires when the PR author has Copilot entitlement; bot authors are silently skipped, no `review_requested` event is recorded, and the required check stays `pending` forever — `mergeStateStatus` stays `BLOCKED` with otherwise green CI. Fall back to plain `gh pr create` (user identity) — this still uses the `as-me`-scoped user-to-server token from §5/§6, so credentials stay manifest-scoped; only the PR authorship changes from App → user. Recovery for an already-opened bot PR: close it and reopen via plain `gh pr create` — Copilot auto-reviews the reopened PR normally. Requesting Copilot manually via `gh api .../requested_reviewers` or GraphQL `requestReviews` does not work around it (REST silently drops, GraphQL rejects bot IDs).
+
 ## Notes
 
 - Never `cat` or print `~/.config/as-me/private-key.pem` or `~/.config/as-me/state.json` — they hold the App private key.
