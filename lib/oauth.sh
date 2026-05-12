@@ -304,7 +304,7 @@ refresh_if_needed() {
     state_json=$1
     access_token=$(printf '%s' "$state_json" | jq -r '.access_token // empty')
     if [ -z "$access_token" ]; then
-        printf 'not logged in; run `juicebox login`\n' >&2
+        printf 'not logged in; run `juice-bot login`\n' >&2
         return 1
     fi
     now=$(date +%s)
@@ -318,12 +318,12 @@ refresh_if_needed() {
     fi
     refresh_token=$(printf '%s' "$state_json" | jq -r '.refresh_token // empty')
     if [ -z "$refresh_token" ]; then
-        printf 'token expired and no refresh token; run `juicebox login`\n' >&2
+        printf 'token expired and no refresh token; run `juice-bot login`\n' >&2
         return 1
     fi
     refresh_exp=$(printf '%s' "$state_json" | jq -r '.refresh_token_expires_at // empty')
     if [ -n "$refresh_exp" ] && [ "$refresh_exp" -lt "$now" ]; then
-        printf 'refresh token expired; run `juicebox login`\n' >&2
+        printf 'refresh token expired; run `juice-bot login`\n' >&2
         return 1
     fi
     client_id=$(printf '%s' "$state_json" | jq -r '.client_id')

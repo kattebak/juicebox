@@ -18,6 +18,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: --help
-        run: ./bin/juicebox --help
+        run: ./bin/juice-bot --help
       - name: status (empty state)
-        run: HOME=$(mktemp -d) ./bin/juicebox status
+        run: HOME=$(mktemp -d) ./bin/juice-bot status

@@ -68,7 +68,7 @@ a { color: #0969da; }
     $('value').className = 'value-box empty';
     $('value').textContent = '(empty — expected ?code=… or ?installation_id=…)';
     $('copy').disabled = true;
-    $('next').innerHTML = '<h3>This page is the callback target for the juicebox setup flow.</h3><p>If you arrived here directly, that\'s fine — it just means there\'s nothing to paste. Run <code class="inline">juicebox init</code> from your terminal to start.</p>';
+    $('next').innerHTML = '<h3>This page is the callback target for the juicebox setup flow.</h3><p>If you arrived here directly, that\'s fine — it just means there\'s nothing to paste. Run <code class="inline">juice-bot init</code> from your terminal to start.</p>';
     return;
   }
 
@@ -83,8 +83,8 @@ a { color: #0969da; }
       : 'App installed on your account/org. Paste the installation id back at your terminal.';
     $('next').innerHTML = `<h3>Back in your terminal</h3>
       <ol>
-        <li>Paste the value above at the <code>paste:</code> prompt of <code class="inline">juicebox install</code>.</li>
-        <li>Then run <code class="inline">juicebox login</code> to mint your user token.</li>
+        <li>Paste the value above at the <code>paste:</code> prompt of <code class="inline">juice-bot install</code>.</li>
+        <li>Then run <code class="inline">juice-bot login</code> to mint your user token.</li>
       </ol>`;
   } else {
     document.title = 'juicebox — manifest code';
@@ -92,9 +92,9 @@ a { color: #0969da; }
     $('subtitle').textContent = 'Paste the temporary code below into your terminal — it\'s good for ~10 minutes.';
     $('next').innerHTML = `<h3>Back in your terminal</h3>
       <ol>
-        <li>Paste the value above at the <code>paste:</code> prompt of <code class="inline">juicebox init</code>.</li>
+        <li>Paste the value above at the <code>paste:</code> prompt of <code class="inline">juice-bot init</code>.</li>
         <li>Open the App's settings page (URL printed by the CLI), find <strong>Identifying and authorizing users</strong>, toggle <strong>Enable Device Flow</strong> on.</li>
-        <li>Run <code class="inline">juicebox install</code>, then <code class="inline">juicebox login</code>.</li>
+        <li>Run <code class="inline">juice-bot install</code>, then <code class="inline">juice-bot login</code>.</li>
       </ol>`;
   }
 

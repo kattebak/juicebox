@@ -20,8 +20,8 @@ else
   git clone "$REPO_URL" "$JUICEBOX_HOME"
 fi
 
-chmod +x "$JUICEBOX_HOME/bin/juicebox"
-ln -sfn "$JUICEBOX_HOME/bin/juicebox" "$BIN_DIR/juicebox"
+chmod +x "$JUICEBOX_HOME/bin/juice-bot"
+ln -sfn "$JUICEBOX_HOME/bin/juice-bot" "$BIN_DIR/juice-bot"
 
 SKILL_DIR="${SKILL_DIR:-$HOME/.claude/skills/juicebox}"
 SKILL_SRC="$JUICEBOX_HOME/skills/juicebox"
@@ -40,8 +40,8 @@ case ":$PATH:" in
      echo "  export PATH=\"$BIN_DIR:\$PATH\"" ;;
 esac
 
-echo "installed: $BIN_DIR/juicebox"
+echo "installed: $BIN_DIR/juice-bot"
 echo "next:"
-echo "  juicebox init --org <name>"
-echo "  juicebox install --org <name>"
-echo "  juicebox login"
+echo "  juice-bot init --org <name>"
+echo "  juice-bot install --org <name>"
+echo "  juice-bot login"
