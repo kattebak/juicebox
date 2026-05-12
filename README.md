@@ -10,8 +10,8 @@ LLM agents turn that API into a privilege-escalation surface. Anything an agent 
 
 `juice-bot` is a scoped GitHub App wrapper for `gh` and `git`. It replaces `gh auth login` (full OAuth) with a GitHub App whose permissions are fixed by the manifest at `contents`, `pull_requests`, `issues`, `metadata`, and `statuses`. Single-user, POSIX `sh`, depends on `curl`, `jq`, `openssl`, `git`, and `gh`. Two modes:
 
-- **juice-bot** (default): user-to-server token, acts as the authenticated user.
-- **juice-bot gh ...** — bot / on-behalf-of mode: installation token, acts as the App; prepends `🧃 created on behalf of @<login>` to PR/issue bodies so reviewers and audit logs can identify agent-authored content.
+- **Plain `gh` / `git`** (default): manifest-scoped user-to-server token, acts as the authenticated user. Existing commands — `gh pr create`, `gh issue list`, `gh api ...`, `git push` — work unmodified. The token is exported via `eval "$(juice-bot env)"` for the shell and provided to git via `!juice-bot git-credential`.
+- **`juice-bot gh <args>`** (bot / on-behalf-of mode): installation token, acts as the App; prepends `🧃 created on behalf of @<login>` to body-bearing subcommands so reviewers and audit logs can identify agent-authored content.
 
 ## Setup
 
