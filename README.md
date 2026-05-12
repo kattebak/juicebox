@@ -4,7 +4,7 @@
 
 GitHub's web UI gates destructive admin actions behind sudo-mode prompts and confirmation modals. The API does not. A token authenticated as you can modify branch protection, add org members, or delete repos in a single curl.
 
-LLM agents turn that API into a privilege-escalation surface. Anything an agent reads — a PR body, an issue, a fetched page, an MCP tool response — can carry instructions the agent then executes. A default `gh auth login` token carries your full account permissions, so every prompt-injection bug becomes a privilege-escalation bug. If the agent also assumes an OIDC role in CI, the same risk extends to whatever that role can reach.
+LLM agents turn that API into a privilege-escalation surface. Anything an agent reads — a PR body, an issue, a fetched page, an MCP tool response — can carry instructions the agent then executes. A default `gh auth login` token carries your full account permissions, so every prompt-injection bug becomes a privilege-escalation bug. The token also has no expiration by default — once exfiltrated, it remains valid indefinitely unless manually revoked. If the agent also assumes an OIDC role in CI, the same risk extends to whatever that role can reach.
 
 ## How
 
@@ -107,7 +107,7 @@ Bot mode picks the installation by reading the current repo's `origin` remote an
 
 ## Security model
 
-The App's manifest declares its maximum permissions (write on contents/PRs/issues/statuses, read on metadata). Users cannot elevate beyond the manifest. No admin, no org-management, no Actions, no packages. To revoke: uninstall the App from the org (Settings → Integrations); every token it has minted is invalidated. The OAuth user token is scoped to the same permissions because it is a user-to-server token bound to the App.
+The App's manifest declares its maximum permissions (write on contents/PRs/issues/statuses, read on metadata). Users cannot elevate beyond the manifest. No admin, no org-management, no Actions, no packages. Token lifetimes are bounded: installation tokens expire after 1 hour; user-to-server tokens after 8 hours, with a refresh token valid 6 months. The long-lived secret is the App's private key at `~/.config/juicebox/private-key.pem`; rotate it (App settings → Private keys → Generate) on suspected compromise. To revoke entirely: uninstall the App from the org (Settings → Integrations); every minted token becomes invalidated. The OAuth user token is scoped to the same permissions because it is a user-to-server token bound to the App.
 
 ## Org-side lockdown
 
