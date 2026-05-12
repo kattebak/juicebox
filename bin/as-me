@@ -1,0 +1,488 @@
+#!/bin/sh
+# shellcheck disable=SC2016
+# (Single-quoted strings with backticks are user-facing command-name hints.)
+# as-me — scoped GitHub App wrapper.
+#
+# Dispatch entry point. Sources lib/{state,jwt,oauth,gh-bot}.sh and runs the
+# requested subcommand.
+
+set -u
+
+# Resolve script dir, following symlinks one level (install.sh symlinks
+# ~/.local/bin/as-me → $AS_ME_HOME/bin/as-me; we need lib/ relative to the
+# real file).
+script_path=$0
+case "$script_path" in
+    /*) ;;
+    *) script_path="$(pwd)/$script_path" ;;
+esac
+# Resolve one symlink layer. readlink -f isn't portable; this handles the
+# install.sh layout (single symlink) without depending on coreutils flags.
+if [ -L "$script_path" ]; then
+    target=$(readlink "$script_path")
+    case "$target" in
+        /*) script_path=$target ;;
+        *) script_path="$(dirname "$script_path")/$target" ;;
+    esac
+fi
+SCRIPT_DIR=$(cd "$(dirname "$script_path")" && pwd)
+LIB_DIR="${SCRIPT_DIR%/bin}/lib"
+
+# shellcheck source=../lib/state.sh
+. "$LIB_DIR/state.sh"
+# shellcheck source=../lib/jwt.sh
+. "$LIB_DIR/jwt.sh"
+# shellcheck source=../lib/oauth.sh
+. "$LIB_DIR/oauth.sh"
+# shellcheck source=../lib/gh-bot.sh
+. "$LIB_DIR/gh-bot.sh"
+
+PAGES_BASE="https://kattebak.github.io/as-me"
+
+print_help() {
+    cat <<EOF
+as-me — scoped GitHub App wrapper
+
+usage:
+  as-me init [--org <name>]      create the GitHub App via manifest flow
+  as-me install [--org <name>]   install the App on user or org
+  as-me login                    OAuth user-to-server login
+  as-me env                      print export GH_TOKEN=... for eval
+  as-me git-credential <op>      git credential helper (get/store/erase)
+  as-me bot <gh-args...>         run gh with an installation token (as the App)
+  as-me status                   show what is configured
+  as-me --help                   this help
+
+  init prints a URL to ${PAGES_BASE}/init.html — open it in any browser,
+  review/edit the App name + owner, click 'Create GitHub App'. GitHub redirects
+  back to a 'paste this' page; copy the code into the still-waiting CLI prompt.
+
+  init defaults the App name to \`\${USER}-only\` (e.g. mvhenten-only) so each
+  install is single-tenant by convention. Pass --name <slug> to override,
+  --description <text> for the description shown in GitHub's UI, or --public
+  to pre-select the public-visibility option in the wizard (lets the App be
+  installed on accounts other than the one that owns it).
+EOF
+}
+
+die() {
+    printf 'error: %s\n' "$1" >&2
+    exit 1
+}
+
+# git_remote_owner — extract owner from `origin` remote (SSH or HTTPS).
+git_remote_owner() {
+    if ! url=$(git config --get remote.origin.url 2>/dev/null); then
+        printf 'no origin remote\n' >&2
+        return 1
+    fi
+    # Strip trailing .git and trailing slashes.
+    url=${url%.git}
+    url=${url%/}
+    # Pull `owner/repo` off the tail.
+    tail=${url##*[:/]}
+    rest=${url%/"$tail"}
+    owner=${rest##*[:/]}
+    if [ -z "$owner" ] || [ -z "$tail" ]; then
+        printf 'could not parse remote: %s\n' "$url" >&2
+        return 1
+    fi
+    printf '%s\n' "$owner"
+}
+
+cmd_init() {
+    # Parse flags.
+    f_org=
+    f_name=
+    f_desc=
+    f_public=
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            --org) f_org=$2; shift 2 ;;
+            --name) f_name=$2; shift 2 ;;
+            --description) f_desc=$2; shift 2 ;;
+            --public) f_public=1; shift ;;
+            --help|-h) print_help; return 0 ;;
+            *) die "unknown flag: $1" ;;
+        esac
+    done
+
+    state=$(load_state)
+
+    # Build URL.
+    default_name=$f_name
+    if [ -z "$default_name" ] && [ -n "${USER:-}" ]; then
+        default_name="${USER}-only"
+    fi
+    url="${PAGES_BASE}/init.html"
+    qs=
+    if [ -n "$default_name" ]; then
+        qs="${qs}${qs:+&}name=$(url_encode "$default_name")"
+    fi
+    if [ -n "$f_desc" ]; then
+        qs="${qs}${qs:+&}desc=$(url_encode "$f_desc")"
+    fi
+    if [ -n "$f_org" ]; then
+        qs="${qs}${qs:+&}org=$(url_encode "$f_org")"
+    fi
+    if [ -n "$f_public" ]; then
+        qs="${qs}${qs:+&}public=1"
+    fi
+    if [ -n "$qs" ]; then
+        url="${url}?${qs}"
+    fi
+
+    {
+        printf 'open this URL in any browser to create your scoped GitHub App:\n\n'
+        printf '%s\n' "$url"
+        printf '\nthe page is the setup wizard — review the App name/owner, see exactly which\n'
+        printf "permissions are being granted (locked by manifest), click 'Create GitHub App'.\n"
+        printf 'GitHub will redirect you to a small paste-helper page; copy the code from\n'
+        printf 'there into the prompt below.\n\n'
+    } >&2
+
+    code=$(prompt_callback_url code) || die "no code in manifest callback"
+
+    tmp=$(mktemp)
+    status=$(
+        curl -sS -o "$tmp" -w '%{http_code}' \
+            -X POST \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            -H 'User-Agent: as-me' \
+            "https://api.github.com/app-manifests/${code}/conversions"
+    )
+    body=$(cat "$tmp")
+    rm -f "$tmp"
+    case "$status" in
+        2*) ;;
+        *) die "manifest conversion $status: $body" ;;
+    esac
+
+    # Save App fields and write PEM.
+    new_state=$(
+        printf '%s' "$state" | jq --argjson app "$body" '
+            .app_id = $app.id
+            | .slug = $app.slug
+            | .client_id = $app.client_id
+            | .client_secret = $app.client_secret
+            | .webhook_secret = $app.webhook_secret
+            | .html_url = $app.html_url
+        '
+    )
+    pem=$(printf '%s' "$body" | jq -r '.pem // empty')
+    if [ -n "$pem" ]; then
+        printf '%s' "$pem" | write_pem
+    fi
+    printf '%s' "$new_state" | save_state
+
+    html_url=$(printf '%s' "$body" | jq -r '.html_url')
+    is_public=$(printf '%s' "$body" | jq -r '.public // false')
+
+    {
+        printf '\napp created: %s\n\n' "$html_url"
+        printf 'REQUIRED before `as-me login`:\n'
+        printf '  1. open %s\n' "$html_url"
+        printf "  2. scroll to 'Identifying and authorizing users'\n"
+        printf "  3. toggle 'Enable Device Flow' ON, click Save\n"
+        printf "  (the manifest can't set this; login aborts without it)\n\n"
+    } >&2
+    if [ "$is_public" != "true" ]; then
+        {
+            printf 'OPTIONAL — if you want to install this App on accounts other\n'
+            printf 'than the one that owns it (e.g. personal AND an org you own):\n'
+            printf '  open %s/advanced\n' "$html_url"
+            printf "  scroll to the bottom, click 'Make public'\n"
+            printf '  (private Apps install only on the owning account; public\n'
+            printf '   is safe — each install is isolated, manifest perms apply.)\n\n'
+        } >&2
+    fi
+    if [ -n "$f_org" ]; then
+        printf 'next: as-me install --org %s\n' "$f_org" >&2
+    else
+        printf 'next: as-me install\n' >&2
+    fi
+}
+
+resolve_installation_owner() {
+    state_json=$1
+    installation_id=$2
+    app_id=$(printf '%s' "$state_json" | jq -r '.app_id // empty')
+    if [ -z "$app_id" ]; then
+        printf 'no app configured; run `as-me init` first\n' >&2
+        return 1
+    fi
+    pp=$(pem_path)
+    jwt=$(app_jwt "$app_id" "$pp") || return 1
+    tmp=$(mktemp)
+    status=$(
+        curl -sS -o "$tmp" -w '%{http_code}' \
+            -H "Authorization: Bearer $jwt" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            -H 'User-Agent: as-me' \
+            "https://api.github.com/app/installations/${installation_id}"
+    )
+    body=$(cat "$tmp")
+    rm -f "$tmp"
+    case "$status" in
+        2*) ;;
+        *)
+            printf 'GET /app/installations/%s failed %s\n' "$installation_id" "$status" >&2
+            return 1
+            ;;
+    esac
+    login=$(printf '%s' "$body" | jq -r '.account.login // empty')
+    if [ -z "$login" ]; then
+        printf 'installation %s has no account.login\n' "$installation_id" >&2
+        return 1
+    fi
+    printf '%s\n' "$login"
+}
+
+cmd_install() {
+    f_org=
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            --org) f_org=$2; shift 2 ;;
+            --help|-h) print_help; return 0 ;;
+            *) die "unknown flag: $1" ;;
+        esac
+    done
+
+    state=$(load_state)
+    slug=$(printf '%s' "$state" | jq -r '.slug // empty')
+    if [ -z "$slug" ]; then
+        die "no app configured; run \`as-me init\` first"
+    fi
+    install_url="https://github.com/apps/${slug}/installations/new"
+    {
+        printf 'open this URL in any browser to install the App:\n\n'
+        printf '%s\n' "$install_url"
+        if [ -n "$f_org" ]; then
+            printf "\non the GitHub page, you'll see a list of accounts where you can install.\n"
+            printf 'pick **%s** (you must be an Owner of that org for it to appear).\n' "$f_org"
+        else
+            printf '\non the GitHub page, pick your personal account or an org you own.\n'
+        fi
+        printf '\nthen choose which repositories the App can access. fewer repos = smaller\n'
+        printf 'juicebox = smaller blast radius. you can change this later in App settings.\n'
+        printf 'GitHub will redirect to a paste-helper page; copy the installation id\n'
+        printf 'from there into the prompt below.\n\n'
+    } >&2
+
+    id=$(prompt_callback_url installation_id) || die "no installation_id in callback"
+    # Validate it's numeric.
+    case "$id" in
+        ''|*[!0-9]*) die "installation_id must be numeric: $id" ;;
+    esac
+
+    actual_owner=$(resolve_installation_owner "$state" "$id") || exit 1
+    if [ -n "$f_org" ] && [ "$f_org" != "$actual_owner" ]; then
+        printf 'note: --org %s was passed but you installed on %s; storing under %s.\n' \
+            "$f_org" "$actual_owner" "$actual_owner" >&2
+    fi
+    new_state=$(
+        printf '%s' "$state" | jq \
+            --arg owner "$actual_owner" \
+            --argjson id "$id" \
+            '.installations[$owner] = $id'
+    )
+    printf '%s' "$new_state" | save_state
+    printf 'installed: %s -> %s\n' "$actual_owner" "$id" >&2
+}
+
+cmd_login() {
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            --help|-h) print_help; return 0 ;;
+            *) die "unknown flag: $1" ;;
+        esac
+    done
+
+    state=$(load_state)
+    client_id=$(printf '%s' "$state" | jq -r '.client_id // empty')
+    slug=$(printf '%s' "$state" | jq -r '.slug // empty')
+    if [ -z "$client_id" ]; then
+        die "no app configured; run \`as-me init\` first"
+    fi
+
+    device_resp=$(start_device_flow "$client_id")
+    rc=$?
+    if [ "$rc" -eq 7 ]; then
+        die "Enable 'Device Flow' in your App's settings at https://github.com/settings/apps/${slug} and re-run \`as-me login\`."
+    elif [ "$rc" -ne 0 ]; then
+        exit 1
+    fi
+
+    user_code=$(printf '%s' "$device_resp" | jq -r '.user_code')
+    device_code=$(printf '%s' "$device_resp" | jq -r '.device_code')
+    interval=$(printf '%s' "$device_resp" | jq -r '.interval // 5')
+    expires_in=$(printf '%s' "$device_resp" | jq -r '.expires_in')
+    verification_uri=$(printf '%s' "$device_resp" | jq -r '.verification_uri // "https://github.com/login/device"')
+    full_url="${verification_uri}?user_code=$(url_encode "$user_code")"
+    mins=$((expires_in / 60))
+
+    {
+        printf 'open this URL to authorize as-me (code %s, expires in %sm):\n\n' "$user_code" "$mins"
+        printf '  %s\n\n' "$full_url"
+        printf "the code is pre-filled via the URL — just click 'Continue', then 'Authorize'.\n"
+        printf 'waiting...\n'
+    } >&2
+
+    new_state=$(poll_device_flow "$state" "$device_code" "$interval" "$expires_in")
+    rc=$?
+    case "$rc" in
+        0) ;;
+        2) die "device code expired; re-run \`as-me login\`" ;;
+        3) die "authorization denied" ;;
+        7) die "Enable 'Device Flow' in your App's settings at https://github.com/settings/apps/${slug} and re-run \`as-me login\`." ;;
+        *) exit 1 ;;
+    esac
+
+    # Fetch the authenticated login and persist.
+    access_token=$(printf '%s' "$new_state" | jq -r '.access_token')
+    if login=$(fetch_authenticated_login "$access_token"); then
+        new_state=$(printf '%s' "$new_state" | jq --arg login "$login" '.login = $login')
+        printf '%s' "$new_state" | save_state
+        printf '\nlogged in as @%s.\n' "$login" >&2
+    else
+        printf '%s' "$new_state" | save_state
+        printf '\nlogged in (warning: could not fetch user login).\n' >&2
+    fi
+}
+
+cmd_env() {
+    state=$(load_state)
+    result=$(refresh_if_needed "$state") || exit 1
+    token=${result%%	*}
+    new_state=${result#*	}
+    if [ "$new_state" != "$state" ]; then
+        printf '%s' "$new_state" | save_state
+    fi
+    printf 'export GH_TOKEN=%s\nexport GITHUB_TOKEN=%s\n' "$token" "$token"
+}
+
+cmd_git_credential() {
+    op=${1:-}
+    if [ "$op" != "get" ]; then
+        exit 0
+    fi
+    # Read key=value lines from stdin until blank line or EOF.
+    host=
+    while IFS= read -r line; do
+        if [ -z "$line" ]; then
+            break
+        fi
+        case "$line" in
+            host=*) host=${line#host=} ;;
+        esac
+    done
+    if [ -n "$host" ] && [ "$host" != "github.com" ]; then
+        return 0
+    fi
+    state=$(load_state)
+    result=$(refresh_if_needed "$state") || exit 1
+    token=${result%%	*}
+    new_state=${result#*	}
+    if [ "$new_state" != "$state" ]; then
+        printf '%s' "$new_state" | save_state
+    fi
+    printf 'username=x-access-token\npassword=%s\n\n' "$token"
+}
+
+cmd_bot() {
+    state=$(load_state)
+    app_id=$(printf '%s' "$state" | jq -r '.app_id // empty')
+    if [ -z "$app_id" ]; then
+        die "no app; run \`as-me init\`"
+    fi
+    owner=$(git_remote_owner) || die "bot mode needs a git repo with origin remote"
+    installation_id=$(printf '%s' "$state" | jq -r --arg o "$owner" '.installations[$o] // empty')
+    if [ -z "$installation_id" ]; then
+        die "no installation for ${owner}; run \`as-me install --org ${owner}\`"
+    fi
+    pp=$(pem_path)
+    token_resp=$(installation_token "$app_id" "$pp" "$installation_id") || exit 1
+    token=$(printf '%s' "$token_resp" | jq -r '.token')
+    login=$(printf '%s' "$state" | jq -r '.login // empty')
+    run_gh_as_bot "$token" "$login" "$@"
+}
+
+cmd_status() {
+    state=$(load_state)
+    now=$(date +%s)
+    sp=$(state_path)
+    pp=$(pem_path)
+    app_id=$(printf '%s' "$state" | jq -r '.app_id // empty')
+    slug=$(printf '%s' "$state" | jq -r '.slug // empty')
+    html_url=$(printf '%s' "$state" | jq -r '.html_url // empty')
+    login=$(printf '%s' "$state" | jq -r '.login // empty')
+    client_id=$(printf '%s' "$state" | jq -r '.client_id // empty')
+    installs_json=$(printf '%s' "$state" | jq -c '.installations // {}')
+    installs_count=$(printf '%s' "$state" | jq -r '.installations | length')
+    access_token=$(printf '%s' "$state" | jq -r '.access_token // empty')
+    expires_at=$(printf '%s' "$state" | jq -r '.expires_at // empty')
+    refresh_exp=$(printf '%s' "$state" | jq -r '.refresh_token_expires_at // empty')
+
+    fmt() {
+        if [ -z "$1" ]; then
+            printf '—'
+            return
+        fi
+        iso=$(date -u -d "@$1" '+%Y-%m-%dT%H:%M:%S.000Z' 2>/dev/null) \
+            || iso=$(date -u -r "$1" '+%Y-%m-%dT%H:%M:%S.000Z' 2>/dev/null) \
+            || iso="?"
+        delta=$(( $1 - now ))
+        printf '%s (%ss)' "$iso" "$delta"
+    }
+
+    printf 'state file:    %s\n' "$sp"
+    printf 'pem file:      %s\n' "$pp"
+    printf 'app id:        %s\n' "${app_id:-—}"
+    printf 'slug:          %s\n' "${slug:-—}"
+    printf 'html url:      %s\n' "${html_url:-—}"
+    if [ -n "$login" ]; then
+        printf 'login:         @%s\n' "$login"
+    else
+        printf 'login:         —\n'
+    fi
+    printf 'client id:     %s\n' "${client_id:-—}"
+    if [ "$installs_count" -gt 0 ]; then
+        printf 'installations: %s\n' "$installs_json"
+    else
+        printf 'installations: —\n'
+    fi
+    if [ -n "$access_token" ]; then
+        printf 'access token:  set\n'
+    else
+        printf 'access token:  —\n'
+    fi
+    printf '  expires:     %s\n' "$(fmt "$expires_at")"
+    printf '  refresh exp: %s\n' "$(fmt "$refresh_exp")"
+}
+
+main() {
+    if [ "$#" -eq 0 ] || [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
+        print_help
+        return 0
+    fi
+    sub=$1
+    shift
+    case "$sub" in
+        init) cmd_init "$@" ;;
+        install) cmd_install "$@" ;;
+        login) cmd_login "$@" ;;
+        env) cmd_env "$@" ;;
+        git-credential) cmd_git_credential "$@" ;;
+        bot) cmd_bot "$@" ;;
+        status) cmd_status "$@" ;;
+        *)
+            printf 'unknown command: %s\n\n' "$sub" >&2
+            print_help >&2
+            exit 2
+            ;;
+    esac
+}
+
+main "$@"

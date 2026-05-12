@@ -5,7 +5,7 @@ Personal scoped GitHub App wrapper. Replaces `gh auth login` (full OAuth) with a
 - **as-me** (default): user-to-server token, acts as the authenticated user.
 - **as-me bot ...** — a.k.a. **🧃 juicebox** / **on-behalf-of** mode: installation token, acts as the App; prepends `🧃 created on behalf of @<login>` to PR/issue bodies so reviewers and audit can tell an agent (not the human) opened the PR or wrote the comment.
 
-Single-user, runs on your laptop, no deps.
+Single-user, runs on your laptop. POSIX `sh` — needs only `curl`, `jq`, `openssl`, `git`, `gh`.
 
 ## Why
 
@@ -70,7 +70,7 @@ GitHub's App-manifest flow requires the manifest to be submitted as the body of 
 
 The page is two static HTML files in this repo at `docs/init.html` and `docs/callback.html`, served via GitHub Pages. They take no credentials and run no backend; the wizard just builds the manifest JSON from the form fields and submits it to github.com directly. Source is auditable; nothing is logged anywhere.
 
-If you'd rather not depend on `kattebak.github.io` (fork-and-host scenarios, air-gapped networks, etc.), fork this repo, enable Pages on your fork, and update `PAGES_BASE` in `bin/as-me.mjs` to your fork's URL.
+If you'd rather not depend on `kattebak.github.io` (fork-and-host scenarios, air-gapped networks, etc.), fork this repo, enable Pages on your fork, and update `PAGES_BASE` in `bin/as-me` to your fork's URL.
 
 ### Remote / headless machines
 
@@ -139,11 +139,11 @@ as-me status                                dump configured state
 
 ## Files
 
-- `bin/as-me.mjs` — CLI
-- `lib/state.mjs` — `~/.config/as-me/state.json` I/O
-- `lib/oauth.mjs` — OAuth device flow + refresh + manifest/install callback server
-- `lib/jwt.mjs` — RS256 JWT + installation token
-- `lib/gh-bot.mjs` — `gh` child process + body-prefix injection
+- `bin/as-me` — CLI (POSIX `sh` dispatch)
+- `lib/state.sh` — `~/.config/as-me/state.json` I/O (set `AS_ME_STATE_DIR` to relocate for tests)
+- `lib/oauth.sh` — OAuth device flow + refresh + paste-back code/installation-id prompt
+- `lib/jwt.sh` — RS256 JWT (openssl) + installation token
+- `lib/gh-bot.sh` — `gh` child process + body-prefix injection
 - `manifest.json` — App manifest (permission ceiling)
 - `install.sh` — curl-installable bootstrap
 - `skills/as-me/SKILL.md` — framework-agnostic agent skill for guided setup

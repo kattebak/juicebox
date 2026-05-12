@@ -6,13 +6,9 @@ BIN_DIR="${BIN_DIR:-$HOME/.local/bin}"
 REPO_URL="https://github.com/kattebak/as-me.git"
 
 command -v git >/dev/null 2>&1 || { echo "error: git is required" >&2; exit 1; }
-command -v node >/dev/null 2>&1 || { echo "error: node (>= 20) is required" >&2; exit 1; }
-
-node_major=$(node -p 'process.versions.node.split(".")[0]')
-if [ "$node_major" -lt 20 ]; then
-  echo "error: node >= 20 required (have $(node -v))" >&2
-  exit 1
-fi
+command -v curl >/dev/null 2>&1 || { echo "error: curl is required" >&2; exit 1; }
+command -v jq >/dev/null 2>&1 || { echo "error: jq is required" >&2; exit 1; }
+command -v openssl >/dev/null 2>&1 || { echo "error: openssl is required" >&2; exit 1; }
 
 command -v gh >/dev/null 2>&1 || echo "warning: gh not found; bot mode requires gh on PATH" >&2
 
@@ -24,8 +20,8 @@ else
   git clone "$REPO_URL" "$AS_ME_HOME"
 fi
 
-chmod +x "$AS_ME_HOME/bin/as-me.mjs"
-ln -sfn "$AS_ME_HOME/bin/as-me.mjs" "$BIN_DIR/as-me"
+chmod +x "$AS_ME_HOME/bin/as-me"
+ln -sfn "$AS_ME_HOME/bin/as-me" "$BIN_DIR/as-me"
 
 SKILL_DIR="${SKILL_DIR:-$HOME/.claude/skills/as-me}"
 SKILL_SRC="$AS_ME_HOME/skills/as-me"
