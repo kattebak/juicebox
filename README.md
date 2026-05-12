@@ -1,19 +1,21 @@
 # juicebox
 
-Personal scoped GitHub App wrapper. Replaces `gh auth login` (full OAuth) with a GitHub App that only has `contents`, `pull_requests`, `issues`, `metadata`, `statuses` — nothing else. Two modes:
-
-- **juice-bot** (default): user-to-server token, acts as the authenticated user.
-- **juice-bot gh ...** — a.k.a. **🧃 bot** / **on-behalf-of** mode: installation token, acts as the App; prepends `🧃 created on behalf of @<login>` to PR/issue bodies so reviewers and audit can tell an agent (not the human) opened the PR or wrote the comment.
-
-Single-user, runs on your laptop. POSIX `sh` — needs only `curl`, `jq`, `openssl`, `git`, `gh`.
-
-## Why
+## Plugging GitHub's privilege escalation vector
 
 GitHub's web UI gates destructive admin actions behind sudo-mode prompts, confirmation modals, and "type the repo name to confirm" screens. The API does none of that. A token authenticated as you can modify branch protection, add org members, or delete repos in a single curl — no friction, no second look.
 
 LLM agents turn that API into a privilege-escalation surface. Anything an agent reads — a PR body, an issue, a fetched page, an MCP tool response — can carry instructions the agent then executes. A default `gh auth login` token has your full account ceiling, so every prompt-injection bug is a privilege-escalation bug. If the agent also assumes an OIDC role in CI, the blast radius extends to whatever that role can reach.
 
 `juice-bot` replaces that token with one bound to a GitHub App whose permission ceiling is fixed in the manifest. It cannot do administration, cannot manage members, cannot touch Actions, cannot read secrets. The ceiling is set once, in code, and applies to every token the App ever mints. Compromise the agent and the worst case is "it can do everything `juice-bot` declares" — not "everything you can do."
+
+## How
+
+Personal scoped GitHub App wrapper. Replaces `gh auth login` (full OAuth) with a GitHub App that only has `contents`, `pull_requests`, `issues`, `metadata`, `statuses` — nothing else. Two modes:
+
+- **juice-bot** (default): user-to-server token, acts as the authenticated user.
+- **juice-bot gh ...** — a.k.a. **🧃 bot** / **on-behalf-of** mode: installation token, acts as the App; prepends `🧃 created on behalf of @<login>` to PR/issue bodies so reviewers and audit can tell an agent (not the human) opened the PR or wrote the comment.
+
+Single-user, runs on your laptop. POSIX `sh` — needs only `curl`, `jq`, `openssl`, `git`, `gh`.
 
 ## Setup
 
